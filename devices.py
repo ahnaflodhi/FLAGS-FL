@@ -72,8 +72,7 @@ class Nodes:
         self.testloss.append(test_loss)
         self.testacc.append(test_acc)
 #         print(f'Node {self.idx}: Trg Loss = {self.trgloss[-1]:0.3f} Trg Acc: {self.trgacc[-1]}  Test Acc : {self.testacc[-1]}', end = ",  ", flush = True)
-#         print(f'Accuracy for node{self.idx} is {test_acc:0.5f}')
-    @profile           
+#         print(f'Accuracy for node{self.idx} is {test_acc:0.5f}')          
     def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2',div_mode ='cfl_div', normalize = True):
         div_dict = {node:None for node in self.neighborhood}
         total_div_dict = copy.deepcopy(div_dict)

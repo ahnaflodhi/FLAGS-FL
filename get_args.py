@@ -1,6 +1,6 @@
 import argparse
 
-def args_parser():
+def arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', type = int, default = 8, help = 'Batch size for the dataset')
     parser.add_argument('-t', type = int, default = 8, help = 'Batch size for the test dataset')

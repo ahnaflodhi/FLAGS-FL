@@ -14,7 +14,6 @@ from data_dist import * # (Returns the dictionary of nodes/data partitions for b
 from DNN import * # (Returns Network, client update, aggregate)
 from env_sysmodel import system_model, FL_Modes
 from devices import Nodes, Servers
-from plots import plot_testacc
 
 args = arg_parser()
 dataset = args.d
@@ -33,7 +32,9 @@ servers = args.ser
 
 modes_list = {'d2d':None, 'chd2d':None, 'hch_d2d': None, 'gossip':None, 'hgossip':None, 'cfl': None, 'sgd' : None}
 
-def D2DFL():
+def D2DFL(dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 
+          num_epochs, shard_size, overlap, dist, prop, agg_prop):
+    
     # Step 1: Define parameters for the environment, dataset and dataset distribution
     location, num_labels, in_ch = dataset_approve(dataset)    
     base_model = Net(num_labels, in_ch, dataset)
@@ -45,7 +46,7 @@ def D2DFL():
     #### Step 3: Divide data among the nodes according to the distribution IID or non-IID
     # Call data_iid/ data_noniid from data_dist
     if dist == 'iid':
-        train_dist = data_iid(traindata, num_nodes)
+        train_dist = data_iid(traindata, num_labels, num_nodes)
     elif dist == 'niid':
         train_dist = data_noniid(traindata, num_nodes, shard_size)
     elif dist == 'niid1':
@@ -56,7 +57,7 @@ def D2DFL():
         train_dist = niid_skew_dist(traindata, num_labels, num_nodes, skew, shard_size)
     
     # Uniform Test distribution for each node. The testing may be carried out on the entire datset
-    test_dist = data_iid(testdata, num_nodes)
+    test_dist = data_iid(testdata, num_labels, num_nodes)
     
     # Step 4: Create Environment
     env = system_model(num_nodes, num_clusters, num_servers)
@@ -64,7 +65,7 @@ def D2DFL():
     # Create Base Parameter Dictionary for Modes
     base_params = { 'dataset' : dataset, 'num_epochs' : num_epochs, 'num_rounds' : num_rounds, 
                    'num_nodes' : num_nodes, 'dist' : dist, 'base_model' : base_model,'num_labels' : num_labels, 
-                   in_channels' : in_ch, 'traindata' : traindata, 'traindata_dist' : train_dist, 
+                   'in_channels' : in_ch, 'traindata' : traindata, 'traindata_dist' : train_dist, 
                    'testdata' : testdata, 'testdata_dist' : test_dist, 'batch_size' : batch_size,
                    'nhood' : env.neighborhood_map, 'env_Lp' : env.Lp, 'num_clusters' : num_clusters,
                    'num_servers': env.num_servers}
@@ -77,6 +78,9 @@ def D2DFL():
     gossip_flg = {'d2d_agg_flg' : 'Random', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
     hgossip_flg = {'d2d_agg_flg' : 'Random', 'ch_agg_flg': False, 'hserver_agg_flg': True, 'inter_ch_agg_flg': False}
     cfl_flg = {'d2d_agg_flg' : 'CServer', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
+    
+    flag_dict = {'d2d': d2d_flags, 'hd2d': hd2d_flags, 'hfl': hfl_flags, 'chd2d':chd2d_flags, 'hch_d2d': hch_d2d_flags, 
+                 'gossip':gossip_flg, 'hgossip':hgossip_flg, 'cfl':cfl_flg, 'sgd':None}
     
     # Step-5: Create Modes and combine mode params and special flags for all modes under mode_params
     mode_params = {mode:None for mode in modes.keys()}
@@ -160,5 +164,39 @@ def D2DFL():
 
                     #Final Server Aggregation
                     modes[mode].serverset[-1].aggregate_servers(modes[mode].serverset[:-1], modes[mode].nodeset)
-    
-    
+                for node in modes[mode].nodeset:
+                    model_sizes += model_size(node.model)
+                    node.model.to('cpu')
+                    
+                if hasattr(modes[mode], 'serverset'):
+                    for server in modes[mode].serverset:
+                        model_sizes += model_size(server.model)
+                        server.model.to('cpu')
+                model_sizes = model_size(modes[mode].cfl_model)
+                modes[mode].cfl_model.to('cpu')
+                
+                print(f'The model size for Mode {mode} is {model_sizes}')
+                torch.cuda.empty_cache()
+            
+            elif mode == 'sgd':
+                node_update(modes[mode].model.cuda(), sgd_optim, sgd_trainloader, modes[mode].avgtrgloss,
+                            modes[mode].avgtrgacc, num_epochs)
+                loss, acc = test(modes[mode].model, sgd_testloader)
+                modes[mode].avgtestloss.append(loss)
+                modes[mode].avgtestacc.append(acc)
+        
+        if rnd % 5 == 0:
+            filename = dataset.upper() + '_' + dist.upper()  + '_' +'n'+ str(num_nodes)  + '_' + 'c' + str(num_clusters) + '_' +'e' + str(num_epochs) + '_' + 'r' + str(num_rounds)
+            save_file(filename, modes, num_nodes)
+
+            
+    folder = './Results'
+    timestr = time.strftime("%Y%m%d-%H%M")
+    filename = 'Final_' + dataset.upper() + '_' + dist.upper()  + '_' +'n'+ str(num_nodes)  + '_' + 'c' + str(num_clusters)  + '_' +'e' + str(num_epochs) + '_' + 'r' + str(num_rounds) + '_' + 'prop' + str(prop) + '_' + 'agg_prop' + str(agg_prop) + '_' + timestr
+    file_path = os.path.join(folder, file_name)
+    save_file(file_path, modes, num_nodes)    
+
+## Main Function
+if __name__ == "__main__":
+#     dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_rounds, num_epochs, shard_size, overlap, dist
+    mode_state = D2DFL(dataset, batch_size, test_batch_size, modes_list,  nodes, clusters, servers, rounds, epochs, shards, overlap_factor, dist_mode, prop, agg_prop)

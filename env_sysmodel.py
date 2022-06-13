@@ -151,7 +151,7 @@ class FL_Modes(Nodes):
 #                'degree', 'dist', 'divergence_dict', 'divergence_conv_dict', 'divergence_fc_dict']
 #         del data['nodeset]
 #         return state       
-    @profile
+
     def form_nodeset(self, num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, nhood):
         # base_model, num_labels, in_channels, traindata, trg_dist, testdata, test_dist, dataset, batch_size, node_neighborhood
         self.nodeset = []
@@ -160,7 +160,7 @@ class FL_Modes(Nodes):
 #             node_n_nhood.append(idx)
             self.nodeset.append(Nodes(idx, self.base_model, num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, 
                                       self.dataset, self.batch_size, node_n_nhood, self.weightset))
-    @profile
+    
     def form_serverset(self, num_servers, num_labels, in_channels, dataset):
         self.serverset = []
         for idx in range(num_servers):
@@ -170,8 +170,7 @@ class FL_Modes(Nodes):
         
     def default_weights(self, Laplacian):
         self.weightset = Laplacian.toarray()
-        
-    @profile    
+         
     def update_round(self):
         """
         Perform local training on the entire worker set of cuda_models.
@@ -212,7 +211,7 @@ class FL_Modes(Nodes):
                 self.apply_ranking(node, self.div_conv_dict[node], rnd, sort_scope, sort_type)
             elif sort_crit == 'fc':
                 self.apply_ranking(node, self.div_fc_dict[node], rnd, sort_scope, sort_type)
-    @profile        
+                
     def nhood_aggregate_round(self, agg_prop, weightage = 'equal'):
         for node in self.nodeset:
             node.aggregate_nodes(self.nodeset, agg_prop, weightage)

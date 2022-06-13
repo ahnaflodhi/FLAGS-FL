@@ -6,21 +6,31 @@ import torch
 import torchvision
 from torchvision import datasets, transforms
 
-def data_iid(dataset, num_nodes):
+def data_iid(dataset, num_classes, num_nodes):
     """
     Sample I.I.D. client data for the selected dataset
     :param dataset:
     :param num_users:
     :return: dict of image index
-    """  
-    num_items = int(len(dataset)/num_nodes)
-    dict_users, all_idxs = {}, [i for i in range(len(dataset))]
-    for i in range(num_nodes):
-        dict_users[i] = set(np.random.choice(all_idxs, num_items,
-                                             replace=False))
-        all_idxs = list(set(all_idxs) - dict_users[i])
+    """ 
+    idx_list = {labels:[] for labels in range(num_classes)}
+    rng = np.random.default_rng()
+    for label in range(num_classes):
+        for i in range(len(dataset)):
+            if dataset.targets[i] == label:
+                idx_list[label].append(i)
+        rng.shuffle(idx_list[label])
+    
+    dict_users = {i:[] for i in range(num_nodes)}
+    node_list = list(range(num_nodes))
+    random.shuffle(node_list)
+    print(node_list)
+    for label in range(num_classes):
+        vals = np.array_split(idx_list[label], num_nodes) #Creates num_nodes uniform splits
+        for i,node in enumerate(node_list):
+            dict_users[node] += list(vals[i])
+    del node_list, idx_list, vals 
     return dict_users
-
 
 def get_dataset_indices(dataset, num_classes):
     """ 

@@ -70,7 +70,6 @@ class Net(nn.Module):
         return num_features
     
 # self.model, self.opt, self.trainset, self.trainloader, self.trgloss, self.trgacc, num_epochs   
-@profile
 def node_update(client_model, optimizer, train_loader, record_loss, record_acc, num_epochs):
     client_model.train()
     for epoch in range(num_epochs):
