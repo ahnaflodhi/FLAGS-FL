@@ -104,11 +104,13 @@ class system_model:
 class FL_Modes(Nodes):
     modes_list = []
     #'d2d', dataset, num_epochs, num_nodes, base_model, num_labels, in_ch, traindata, train_dist, testdata, test_dist, dataset, batch_size, env.neighborhood_map, env.Lp
-    def __init__(self, name, dataset, num_epochs, num_rounds, num_nodes, dist, base_model, num_labels, in_channels, traindata, traindata_dist, 
-                 testdata, testdata_dist, batch_size, nhood, env_Lp, num_clusters, **kwargs):
+    def __init__(self, name, dataset, num_epochs, num_rounds, num_nodes, dist, base_model, 
+                 num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, 
+                 batch_size, nhood, env_Lp, num_clusters, **kwargs):
         # Kwargs include d2d_agg_flg, ch_agg_flg, hserver_agg_flg, 
         
-        super().__init__(1, base_model, num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, dataset, batch_size, [0,0], [0,0])
+        super().__init__(1, base_model, num_labels, in_channels, traindata, traindata_dist, 
+                         testdata, testdata_dist, dataset, batch_size, [0,0], [0,0])
         self.name = name
         self.dataset = dataset
         self.dist = dist
@@ -158,8 +160,8 @@ class FL_Modes(Nodes):
         for idx in range(self.num_nodes):
             node_n_nhood = nhood[idx]
 #             node_n_nhood.append(idx)
-            self.nodeset.append(Nodes(idx, self.base_model, num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, 
-                                      self.dataset, self.batch_size, node_n_nhood, self.weightset))
+            self.nodeset.append(Nodes(idx, self.base_model, num_labels, in_channels, traindata, traindata_dist, 
+                                      testdata, testdata_dist, self.dataset, self.batch_size, node_n_nhood, self.weightset))
     
     def form_serverset(self, num_servers, num_labels, in_channels, dataset):
         self.serverset = []
@@ -200,7 +202,7 @@ class FL_Modes(Nodes):
     
     def ranking_round(self, rnd, mode):
         for node in self.nodeset:
-            node.neighborhood_divergence(self.nodeset, self.cfl_model, div_mode = 'cfl_div', normalize = True)
+            node.neighborhood_divergence(self.nodeset, self.cfl_model, div_mode = 'cfl_div', normalize = False)
             node.nhood_ranking(rnd, mode, sort_scope = 1)
             
     def nhood_ranking(self, rnd, sort_crit = 'total', sort_scope= 1 , sort_type = 'min'):

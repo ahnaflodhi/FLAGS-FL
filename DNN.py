@@ -70,7 +70,8 @@ class Net(nn.Module):
         return num_features
     
 # self.model, self.opt, self.trainset, self.trainloader, self.trgloss, self.trgacc, num_epochs   
-def node_update(client_model, optimizer, train_loader, record_loss, record_acc, num_epochs):
+def node_update(client_model, optimizer, train_loader, record_loss, record_acc, epochs_done, num_epochs):
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.1 )
     client_model.train()
     for epoch in range(num_epochs):
 #         epoch_loss = 0.0
@@ -91,6 +92,10 @@ def node_update(client_model, optimizer, train_loader, record_loss, record_acc, 
             correct_state.append(correct.item())
 #             if batch_idx % 100 == 0:    # print every 100 mini-batches
 #                 print('[%d, %5d] loss-acc: %.3f - %.3f' %(epoch+1, batch_idx+1, sum(batch_loss)/len(batch_loss), sum(correct_state)/len(correct_state)))
+        
+        epochs_done += 1
+        if epochs_done == 20: # Reduce LR after this many epocs.
+            scheduler.step()
             
         epoch_loss = sum(batch_loss) / len(batch_loss)
         epoch_acc = sum(correct_state) / len(correct_state)

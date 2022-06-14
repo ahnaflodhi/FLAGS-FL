@@ -17,7 +17,7 @@ class Nodes:
     
     def __init__(self, node_idx: int, base_model: 'Net object', num_labels: int, in_channels: int, 
                  traindata, trg_dist:list, testdata, test_dist:list, dataset:str, batch_size:int,
-                 node_neighborhood: list, network_weights: list, lr = 0.01, wt_init = False, role = 'node'):
+                 node_neighborhood: list, network_weights: list, lr = 0.1, wt_init = False, role = 'node'):
         """
         Creates the Node Object.
         Contains methods for individual nodes to perform.
@@ -31,6 +31,7 @@ class Nodes:
         self.degree = len(self.neighborhood)
         self.weights = network_weights[self.idx]
         self.role = role
+        self.epochs = 0 # Time of creation -Assuming no learning has taken place. Necessary for LR scheduler
         
         # Dataset and data dist related
         self.trainset = trg_dist[self.idx]
@@ -58,10 +59,10 @@ class Nodes:
             self.model = copy.deepcopy(base_model)
         else:
             self.model = Net(num_labels, in_channels, dataset)
-        self.opt = optim.SGD(self.model.parameters(), lr = lr)
+        self.opt = optim.SGD(self.model.parameters(), lr = lr, momentum = 0.9)
         
     def local_update(self, num_epochs):
-        node_update(self.model, self.opt, self.trainloader, self.trgloss, self.trgacc, num_epochs)
+        node_update(self.model, self.opt, self.trainloader, self.trgloss, self.trgacc, self.epochs, num_epochs)
 #         if len(self.trgloss) > 1:
 #             print(f'Node {self.idx} : Delta Trgloss = {self.trgloss[-2] - self.trgloss[-1]:0.3f}', end = ",  ", flush = True)
 #         else:
@@ -71,9 +72,9 @@ class Nodes:
         test_loss, test_acc = test(self.model, self.testloader)
         self.testloss.append(test_loss)
         self.testacc.append(test_acc)
-#         print(f'Node {self.idx}: Trg Loss = {self.trgloss[-1]:0.3f} Trg Acc: {self.trgacc[-1]}  Test Acc : {self.testacc[-1]}', end = ",  ", flush = True)
+        print(f'Node {self.idx}: Trg Loss = {self.trgloss[-1]:0.3f} Trg Acc: {self.trgacc[-1]}  Test Acc : {self.testacc[-1]}', end = ",  ", flush = True)
 #         print(f'Accuracy for node{self.idx} is {test_acc:0.5f}')          
-    def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2',div_mode ='cfl_div', normalize = True):
+    def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2', div_mode ='cfl_div', normalize = False):
         div_dict = {node:None for node in self.neighborhood}
         total_div_dict = copy.deepcopy(div_dict)
         conv_div_dict = copy.deepcopy(div_dict)
