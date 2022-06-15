@@ -5,6 +5,7 @@ import networkx as nx
 import random
 import copy
 import heapq
+import sys, gc
 
 import torch
 import torch.nn as nn
@@ -70,8 +71,9 @@ class Net(nn.Module):
         return num_features
     
 # self.model, self.opt, self.trainset, self.trainloader, self.trgloss, self.trgacc, num_epochs   
+
 def node_update(client_model, optimizer, train_loader, record_loss, record_acc, epochs_done, num_epochs):
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.1 )
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.1)
     client_model.train()
     for epoch in range(num_epochs):
 #         epoch_loss = 0.0
@@ -92,33 +94,36 @@ def node_update(client_model, optimizer, train_loader, record_loss, record_acc, 
             correct_state.append(correct.item())
 #             if batch_idx % 100 == 0:    # print every 100 mini-batches
 #                 print('[%d, %5d] loss-acc: %.3f - %.3f' %(epoch+1, batch_idx+1, sum(batch_loss)/len(batch_loss), sum(correct_state)/len(correct_state)))
-        
         epochs_done += 1
-        if epochs_done == 20: # Reduce LR after this many epocs.
-            scheduler.step()
-            
+        if epochs_done == 5: # Reduce LR after this many epocs.
+            scheduler.step()    
         epoch_loss = sum(batch_loss) / len(batch_loss)
         epoch_acc = sum(correct_state) / len(correct_state)
         record_loss.append(round(epoch_loss, 3))
         record_acc.append(round(epoch_acc,3))
-        del data, targets, batch_loss
-        del loss, output, correct_state
-        del epoch_loss, epoch_acc
-
+    del data, targets, batch_loss
+    del loss, output, correct_state
+    del epoch_loss, epoch_acc
+    gc.collect()
+    
 def aggregate(model_list, node_list, scale, noise = False):
     agg_model = copy.deepcopy(model_list[0].model)
     ref_dict = copy.deepcopy(agg_model.state_dict())
-    models = [copy.deepcopy(model_list[node].model) for node in node_list]
-    if noise == True:
+    if noise == True: # Create copies so that original models are not corrupted. Only received ones become noisy
+        models = [copy.deepcopy(model_list[node].model) for node in node_list]
         models = [Net.add_noise(model) for model in models]
+        for k in ref_dict.keys():
+            ref_dict[k] = torch.stack([models[i].state_dict()[k].float() for i, _ in enumerate(node_list)], 0).mean(0)
+        del models
+        
+    else:
+        for k in ref_dict.keys():
+            ref_dict[k] = torch.stack([model_list[i].model.state_dict()[k].float() for i, _ in enumerate(node_list)], 0).mean(0)
+    gc.collect()
 #         for k in ref_dict.keys():
 #             ref_dict[k] = torch.stack([torch.mul(models[i].state_dict()[k].float(), scale[node]) for i, node in enumerate(node_list)], 0).mean(0)
-    for k in ref_dict.keys():
-#             ref_dict[k] = torch.stack([torch.mul(model_list[node].model.state_dict()[k].float(), scale[node]) for node in node_list], 0).mean(0)
-        ref_dict[k] = torch.stack([models[i].state_dict()[k].float() for i, node in enumerate(node_list)], 0).mean(0)
     
     agg_model.load_state_dict(ref_dict)
-    del models
     return agg_model
 
 def model_checker(model1, model2):
@@ -159,20 +164,6 @@ def extract_weights(model, add_noise = True):
             continue
         weights[key] = model.state_dict()[key]
     return weights
-
-def model_checker(model1, model2):
-    models_differ = 0
-    for modeldata1, modeldata2 in zip(model1.state_dict().items(), model2.state_dict().items()):
-        if torch.equal(modeldata1[1], modeldata2[1]):
-            pass
-        else:
-            models_differ += 1
-            if (modeldata1[0] ==  modeldata2[0]):
-                print("Mismatch at ", modeldata1[0])
-            else:
-                raise Exception
-    if models_differ == 0:
-        print('Models match')
 
 def calculate_divergence(modes, main_model_dict, cluster_set, num_nodes, divergence_results):
     centr_fed_ref = np.random.randint(0, num_nodes)

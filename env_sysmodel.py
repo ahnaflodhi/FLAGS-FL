@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import copy
 import heapq
 import pickle
+import sys
 
 import torch
 import torchvision
@@ -178,12 +179,13 @@ class FL_Modes(Nodes):
         Perform local training on the entire worker set of cuda_models.
         """
         temp_loss = []
-        for node in self.nodeset:
+        for i, node in enumerate(self.nodeset):
             epochs = np.random.randint(1, 4) # Different local updates. Set to a number if homogenous training needed
     #           node.local_update(self.epochs) # Synchornous aggregation: Same # of epochs
             node.local_update(epochs) # Asynchronous Aggregation            
             temp_loss.append(node.trgloss[-1])
         self.avgtrgloss.append(sum(temp_loss)/self.num_nodes)
+        
         del temp_loss
         
     def test_round(self, cluster_set):
@@ -254,8 +256,8 @@ class FL_Modes(Nodes):
         for ch_pair in ch_pairs:
             scale = {ch:1.0 for ch in cluster_heads}
             aggregate(self.nodeset, ch_pair, scale)
-            self.nodeset[ch_pair[1]].model = copy.deepcopy(self.nodeset[ch_pair[0]]).model
-#             self.nodeset[ch_pair[1]].model.load_state_dict(self.nodeset[ch_pair[0]].model.state_dict())    
+#             self.nodeset[ch_pair[1]].model = copy.deepcopy(self.nodeset[ch_pair[0]]).model
+            self.nodeset[ch_pair[1]].model.load_state_dict(self.nodeset[ch_pair[0]].model.state_dict())    
     
     def cfl_aggregate_round(self, prop,  weightage = 'equal'):
         if weightage == 'equal':
@@ -268,12 +270,13 @@ class FL_Modes(Nodes):
             agg_count = 1
         sel_nodes = random.sample(nodelist, agg_count) # Random Sampling
         agg_model = aggregate(self.nodeset, sel_nodes, scale)
-        self.cfl_model = copy.deepcopy(agg_model)
-#         self.cfl_model.load_state_dict(agg_model.state_dict())
+#         self.cfl_model = copy.deepcopy(agg_model)
+        self.cfl_model.load_state_dict(agg_model.state_dict())
+        del agg_model
                           
         for node in self.nodeset:
-            node.model = copy.deepcopy(self.cfl_model)
-#             node.model.load_state_dict(self.cfl_model.state_dict()) 
+#             node.model = copy.deepcopy(self.cfl_model)
+            node.model.load_state_dict(self.cfl_model.state_dict()) 
     
     def server_aggregate(self, cluster_id, cluster_set):
         ref_dict = self.nodeset[0].model.state_dict()

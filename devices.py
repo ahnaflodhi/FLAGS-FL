@@ -55,12 +55,11 @@ class Nodes:
         
     def base_model_selection(self, base_model, num_labels, in_channels, dataset, wt_init, lr):
         # Same weight initialization
+        self.model = Net(num_labels, in_channels, dataset)
         if wt_init == True:
-            self.model = copy.deepcopy(base_model)
-        else:
-            self.model = Net(num_labels, in_channels, dataset)
+            self.model.load_state_dict(base_mode.state_dict())
         self.opt = optim.SGD(self.model.parameters(), lr = lr, momentum = 0.9)
-        
+ 
     def local_update(self, num_epochs):
         node_update(self.model, self.opt, self.trainloader, self.trgloss, self.trgacc, self.epochs, num_epochs)
 #         if len(self.trgloss) > 1:
@@ -72,8 +71,8 @@ class Nodes:
         test_loss, test_acc = test(self.model, self.testloader)
         self.testloss.append(test_loss)
         self.testacc.append(test_acc)
-        print(f'Node {self.idx}: Trg Loss = {self.trgloss[-1]:0.3f} Trg Acc: {self.trgacc[-1]}  Test Acc : {self.testacc[-1]}', end = ",  ", flush = True)
-#         print(f'Accuracy for node{self.idx} is {test_acc:0.5f}')          
+#         print(f'Node {self.idx}: LR={self.opt.param_groups[0]["lr"]} Trg Loss= {self.trgloss[-1]:0.3f} Trg Acc= {self.trgacc[-1]}  Test Acc= {self.testacc[-1]:0.3f}', end = ", ", flush = True)
+         
     def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2', div_mode ='cfl_div', normalize = False):
         div_dict = {node:None for node in self.neighborhood}
         total_div_dict = copy.deepcopy(div_dict)
@@ -153,6 +152,7 @@ class Nodes:
             elif sort_type == 'max':
                 sorted_nhood = heapq.nlargest(len(target), prev_performance.items(), key = lambda i:i[1])
             self.ranked_nhood = [nhbr for nhbr, _ in sorted_nhood]
+            del sorted_nhood
 
     def scale_update(self, weightage):
 #         # Aggregation Weights
@@ -187,8 +187,9 @@ class Nodes:
                     print(f'Agg_scope {agg_scope} does not conform to size of Cluster_Set {len(cluster_set)}')
         scale = self.scale_update(weightage)
         agg_model = aggregate(nodeset, agg_targets, scale)
-        self.model = copy.deepcopy(agg_model)
-#         self.model.load_state_dict(agg_model.state_dict())
+#         self.model = copy.deepcopy(agg_model)
+        self.model.load_state_dict(agg_model.state_dict())
+        del agg_model
         
     def aggregate_random(self, nodeset, weightage):
         target_id = self.idx
@@ -201,9 +202,9 @@ class Nodes:
             scale = {node:1.0 for node in node_list}
                      
         agg_model = aggregate(nodeset, node_list, scale)
-        self.model = copy.deepcopy(agg_model)
-#         self.model.load_state_dict(agg_model.state_dict())
-        
+#         self.model = copy.deepcopy(agg_model)
+        self.model.load_state_dict(agg_model.state_dict())
+        del agg_model
         
 class Servers:
     def __init__(self, server_id, model, records = False):
@@ -218,20 +219,22 @@ class Servers:
     def aggregate_servers(self, server_set, nodeset):
         scale = {server_id:1.0 for server_id in range(len(server_set)) }
         global_model = aggregate(server_set, list(range(len(server_set))), scale)
-        self.model = copy.deepcopy(global_model)
-#         self.model.load_state_dict(global_model.state_dict())
+#         self.model = copy.deepcopy(global_model)
+        self.model.load_state_dict(global_model.state_dict())
+        del global_model
 
         for server in server_set:
-            server.model = copy.deepcopy(self.model)
-#             server.model.load_state_dict(self.model.state_dict())
+#             server.model = copy.deepcopy(self.model)
+            server.model.load_state_dict(self.model.state_dict())
             
         for node in nodeset:
-            node.model = copy.deepcopy(self.model)
-#             node.model.load_state_dict(self.model.state_dict())
+#             node.model = copy.deepcopy(self.model)
+            node.model.load_state_dict(self.model.state_dict())
         
     def aggregate_clusters(self, nodeset, assigned_nodes, prop):
         nodelist = random.sample(assigned_nodes, int(prop*len(assigned_nodes)))
         scale = {node:1.0 for node in nodelist}
         server_agg_model = aggregate(nodeset, nodelist, scale)
-        self.model = copy.deepcopy(server_agg_model)
-#         self.model.load_state_dict(server_agg_model.state_dict())
+#         self.model = copy.deepcopy(server_agg_model)
+        self.model.load_state_dict(server_agg_model.state_dict())
+        del server_agg_model
