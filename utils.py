@@ -17,16 +17,13 @@ def dataset_approve(dataset:'str'):
     if dataset == 'mnist': # Num labels will depend on the class in question
         location = '../data/'
         num_labels = 10
-        in_ch = 1
     elif dataset == 'cifar':
         location = '../data/'
         num_labels = 10
-        in_ch = 3
     elif dataset == 'fashion':
         location = '../data/'
         num_labels = 10
-        in_ch = 1
-    return location, num_labels, in_ch
+    return location, num_labels
 
 def model_size(model):
     param_size = 0

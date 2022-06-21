@@ -14,6 +14,7 @@ from data_dist import * # (Returns the dictionary of nodes/data partitions for b
 from DNN import * # (Returns Network, client update, aggregate)
 from env_sysmodel import system_model, FL_Modes
 from devices import Nodes, Servers
+import torchvision.models as models
 
 args = arg_parser()
 dataset = args.d
@@ -29,22 +30,41 @@ test_batch_size = args.t
 prop = args.prop
 agg_prop = args.aggprop
 servers = args.ser
+modeltype = args.model
 
- 
-modes_list = {'d2d':None, 'chd2d':None, 'hch_d2d': None, 'gossip':None, 'hgossip':None, 'cfl': None, 'sgd' : None}
+# 'chd2d':None, 'hch_d2d': None, 'gossip':None, 'hgossip':None, 'd2d':None, 
+modes_list = {'cfl': None, 'sgd' : None}
 
-def D2DFL(dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 
+def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 
           num_epochs, shard_size, overlap, dist, prop, agg_prop):
     
     # Step 1: Define parameters for the environment, dataset and dataset distribution
     starttime = time.strftime("%Y%m%d-%H%M")
-    location, num_labels, in_ch = dataset_approve(dataset)    
-    base_model = Net(num_labels, in_ch, dataset)
-
+    location, num_labels = dataset_approve(dataset)
     
-    #### Step 2: Import Dataset partitioned into train and testsets
+    if model_type == 'shallow':
+        if dataset == 'mnist' or dataset == 'fashion':
+            in_ch = 1
+        elif dataset  == 'cifar':
+            in_ch = 3
+        base_model = Net(num_labels, in_ch, dataset)
+    
+    else:
+        in_ch = 3
+        if model_type == 'vgg16':
+            base_model = models.vgg16(num_classes = num_labels)
+    
+        elif model_type ==  'alexnet':
+            base_model = models.alexnet()
+            base_model.classifier[6] = nn.Linear(in_features=4096, out_features= num_labels, bias=True)
+            
+        elif model_type == 'resnet':
+            base_model = models.resnet18()
+            base_model.fc = nn.Linear(in_features=512, out_features=num_labels, bias=True)
+    
+        #### Step 2: Import Dataset partitioned into train and testsets
     # Call data_select from data_utils
-    traindata, testdata = dataset_select(dataset, location)
+    traindata, testdata = dataset_select(dataset, location, in_ch)
 
     #### Step 3: Divide data among the nodes according to the distribution IID or non-IID
     # Call data_iid/ data_noniid from data_dist
@@ -108,13 +128,12 @@ def D2DFL(dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, 
             
             # Start Federation Protocol
             for rnd in range(num_rounds):
-                ### Move Mode-models to cuda
-                for node in modes[mode].nodeset:
-                    node.model.to('cuda')
-                if hasattr(modes[mode], 'serverset'):
-                    for server in modes[mode].serverset:
-                        server.model.to('cuda')
-                modes[mode].cfl_model.to('cuda')
+#                 ### Move Mode-models to cuda
+#                 if hasattr(modes[mode], 'serverset'):
+#                     for server in modes[mode].serverset:
+#                         server.model.to('cuda')
+#                 if mode != 'cfl':
+#                     modes[mode].cfl_model.to('cuda')
 #                 print(f'The Cuda Summary before update {torch.cuda.memory_summary()}')
                 # Initiate Local Training on models
                 modes[mode].update_round()
@@ -128,7 +147,7 @@ def D2DFL(dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, 
                 # Add noise / Share partials / 
 
                 # Perform Neighborhood analysis and update weights assigned to neighbors
-                modes[mode].ranking_round(rnd, mode)
+#                 modes[mode].ranking_round(rnd, mode)
 #                 print(f'The Cuda Summary after ranking {torch.cuda.memory_summary()}')
 
                 #4-Aggregate from neighborhood  using the weights obtained in the previous step
@@ -218,4 +237,4 @@ def D2DFL(dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, 
 ## Main Function
 if __name__ == "__main__":
 #     dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_rounds, num_epochs, shard_size, overlap, dist
-    mode_state = D2DFL(dataset, batch_size, test_batch_size, modes_list,  nodes, clusters, servers, rounds, epochs, shards, overlap_factor, dist_mode, prop, agg_prop)
+    mode_state = D2DFL(modeltype, dataset, batch_size, test_batch_size, modes_list,  nodes, clusters, servers, rounds, epochs, shards, overlap_factor, dist_mode, prop, agg_prop)

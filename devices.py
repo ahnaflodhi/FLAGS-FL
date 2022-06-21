@@ -2,7 +2,7 @@ from DNN import *
 import heapq
 import numpy as np
 from data_utils import DataSubset
-import copy
+import copy, gc
 
 import torch
 import torchvision
@@ -55,13 +55,14 @@ class Nodes:
         
     def base_model_selection(self, base_model, num_labels, in_channels, dataset, wt_init, lr):
         # Same weight initialization
-        self.model = Net(num_labels, in_channels, dataset)
-        if wt_init == True:
-            self.model.load_state_dict(base_mode.state_dict())
+        self.model = copy.deepcopy(base_model)
+#         if wt_init == True:
+#             self.model.load_state_dict(base_mode.state_dict())
         self.opt = optim.SGD(self.model.parameters(), lr = lr, momentum = 0.9)
  
     def local_update(self, num_epochs):
         node_update(self.model, self.opt, self.trainloader, self.trgloss, self.trgacc, self.epochs, num_epochs)
+        print(f'Node-{self.idx}: Loss{self.trgloss[-1]} TrgAcc {self.trgacc[-1]}', end = ', ', flush = True)
 #         if len(self.trgloss) > 1:
 #             print(f'Node {self.idx} : Delta Trgloss = {self.trgloss[-2] - self.trgloss[-1]:0.3f}', end = ",  ", flush = True)
 #         else:
@@ -71,7 +72,7 @@ class Nodes:
         test_loss, test_acc = test(self.model, self.testloader)
         self.testloss.append(test_loss)
         self.testacc.append(test_acc)
-#         print(f'Node {self.idx}: LR={self.opt.param_groups[0]["lr"]} Trg Loss= {self.trgloss[-1]:0.3f} Trg Acc= {self.trgacc[-1]}  Test Acc= {self.testacc[-1]:0.3f}', end = ", ", flush = True)
+        print(f'Node {self.idx}: LR={self.opt.param_groups[0]["lr"]} Trg Loss= {self.trgloss[-1]:0.3f} Trg Acc= {self.trgacc[-1]}  Test Acc= {self.testacc[-1]:0.3f}', end = ", ", flush = True)
          
     def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2', div_mode ='cfl_div', normalize = False):
         div_dict = {node:None for node in self.neighborhood}
@@ -153,6 +154,7 @@ class Nodes:
                 sorted_nhood = heapq.nlargest(len(target), prev_performance.items(), key = lambda i:i[1])
             self.ranked_nhood = [nhbr for nhbr, _ in sorted_nhood]
             del sorted_nhood
+            gc.collect()
 
     def scale_update(self, weightage):
 #         # Aggregation Weights
@@ -190,6 +192,7 @@ class Nodes:
 #         self.model = copy.deepcopy(agg_model)
         self.model.load_state_dict(agg_model.state_dict())
         del agg_model
+        gc.collect()
         
     def aggregate_random(self, nodeset, weightage):
         target_id = self.idx
@@ -205,6 +208,7 @@ class Nodes:
 #         self.model = copy.deepcopy(agg_model)
         self.model.load_state_dict(agg_model.state_dict())
         del agg_model
+        gc.collect()
         
 class Servers:
     def __init__(self, server_id, model, records = False):
@@ -230,6 +234,7 @@ class Servers:
         for node in nodeset:
 #             node.model = copy.deepcopy(self.model)
             node.model.load_state_dict(self.model.state_dict())
+        gc.collect()
         
     def aggregate_clusters(self, nodeset, assigned_nodes, prop):
         nodelist = random.sample(assigned_nodes, int(prop*len(assigned_nodes)))
@@ -238,3 +243,4 @@ class Servers:
 #         self.model = copy.deepcopy(server_agg_model)
         self.model.load_state_dict(server_agg_model.state_dict())
         del server_agg_model
+        gc.collect()

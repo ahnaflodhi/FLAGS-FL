@@ -26,51 +26,49 @@ class DataSubset(Dataset):
 #         label = self.dataset.targets[item]
         return torch.tensor(image), torch.tensor(label)
 
-def dataset_select(dataset, location):
+def dataset_select(dataset, location, in_ch):
     """ 
     Select from MNIST, CIFAR-10 or FASHION-MNIST
     """
     ## MNIST
-    if dataset == 'mnist':
-        ### Choose transforms
-        transform=torchvision.transforms.Compose([
+    if dataset == 'mnist' or dataset == 'fashion':
+        if in_ch == 1:
+           ### Choose transforms
+            transform = transforms.Compose([
                                    torchvision.transforms.ToTensor(),
                                    torchvision.transforms.Normalize(
-                                    (0.1307,), (0.3081,)),
-                                    ])
+                                    (0.1307,), (0.3081,))])
+        elif in_ch == 3:
+            transform = transforms.Compose([transforms.ToTensor(), 
+                                            transforms.Resize(224), 
+                                            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                                            transforms.Grayscale(num_output_channels = 3)]) #transforms.Lambda(lambda x: x.expand(3, -1, -1))
 
-        ## Create Train and Test Dataets
-        traindata = torchvision.datasets.MNIST(root = location, train = True, download = True, transform = transform)
-        testdata = torchvision.datasets.MNIST(root = location, train = False, download = True, transform = transform)
-
+        if dataset == 'mnist':
+            ## Create Train and Test Dataets
+            traindata = torchvision.datasets.MNIST(root = location, train = True, download = True, transform = transform)
+            testdata = torchvision.datasets.MNIST(root = location, train = False, download = True, transform = transform)
 #         traindata = load_dataset(root = location, train = True, transform = transformations)
 #         traindata.data = torch.unsqueeze(traindata.data, 1)
 #         testdata = load_dataset(root = location, train = False, transform = transformations)
 #         testdata.data = torch.unsqueeze(testdata.data, 1)
-    
 
+        elif dataset == 'fashion':
+            # Download and load the training data
+            traindata = datasets.FashionMNIST(root = location, download = True, train = True, transform = transform)
+            testdata = datasets.FashionMNIST(root =location, download = True, train = False, transform = transform)
+    
     ## CIFAR
     elif dataset == 'cifar':
         ### Choose transforms
         transform = transforms.Compose(
         [transforms.ToTensor(),
-         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-        
-        ###
+         transforms.Resize(224),
+         transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])])
+
         traindata = torchvision.datasets.CIFAR10(root= location, train = True, download = True, transform = transform)
         testdata = torchvision.datasets.CIFAR10(root = location, train = False, download = True, transform = transform)
-    
-    elif dataset == 'fashion':
-        # Define a transform to normalize the data
-        transform=torchvision.transforms.Compose([
-                                   torchvision.transforms.ToTensor(),
-                                   torchvision.transforms.Normalize(
-                                    (0.1307,), (0.3081,)),
-                                    ])
-
-        # Download and load the training data
-        traindata = datasets.FashionMNIST(root = location, download = True, train = True, transform = transform)
-        testdata = datasets.FashionMNIST(root =location, download = True, train = False, transform = transform)
     
     
     else:

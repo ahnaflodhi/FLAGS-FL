@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torchvision.models as models
 
 
 class Net(nn.Module):
@@ -87,24 +88,27 @@ def node_update(client_model, optimizer, train_loader, record_loss, record_acc, 
             output = client_model(data)
             loss = F.cross_entropy(output, targets)
             _ , output = torch.max(output.data, 1)
+            
             loss.backward()
             optimizer.step()
             correct += (output == targets).float().sum() / output.shape[0]
             batch_loss.append(loss.item())
             correct_state.append(correct.item())
+            print(f'Target {targets} Output {output}, correct {correct.item()}', end = ', ', flush = True)
 #             if batch_idx % 100 == 0:    # print every 100 mini-batches
 #                 print('[%d, %5d] loss-acc: %.3f - %.3f' %(epoch+1, batch_idx+1, sum(batch_loss)/len(batch_loss), sum(correct_state)/len(correct_state)))
         epochs_done += 1
-        if epochs_done == 5: # Reduce LR after this many epocs.
+        if epochs_done == 50: # Reduce LR after this many epocs.
             scheduler.step()    
         epoch_loss = sum(batch_loss) / len(batch_loss)
         epoch_acc = sum(correct_state) / len(correct_state)
         record_loss.append(round(epoch_loss, 3))
         record_acc.append(round(epoch_acc,3))
-    del data, targets, batch_loss
-    del loss, output, correct_state
-    del epoch_loss, epoch_acc
-    gc.collect()
+        print(f'Loss {epoch_loss}, Acc {epoch_acc}', end = ',  ',  flush = True)
+#     del data, targets, batch_loss
+#     del loss, output, correct_state
+#     del epoch_loss, epoch_acc
+#     gc.collect()
     
 def aggregate(model_list, node_list, scale, noise = False):
     agg_model = copy.deepcopy(model_list[0].model)
@@ -124,6 +128,7 @@ def aggregate(model_list, node_list, scale, noise = False):
 #             ref_dict[k] = torch.stack([torch.mul(models[i].state_dict()[k].float(), scale[node]) for i, node in enumerate(node_list)], 0).mean(0)
     
     agg_model.load_state_dict(ref_dict)
+    gc.collect()
     return agg_model
 
 def model_checker(model1, model2):

@@ -5,10 +5,11 @@ import matplotlib.pyplot as plt
 import copy
 import heapq
 import pickle
-import sys
+import sys, gc
 
 import torch
 import torchvision
+import torchvision.models as models
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset, DataLoader, TensorDataset, IterableDataset
@@ -118,9 +119,10 @@ class FL_Modes(Nodes):
         self.epochs = num_epochs
         self.rounds = num_rounds
         self.base_model = copy.deepcopy(base_model)
-        self.cfl_model = copy.deepcopy(self.base_model)
         self.batch_size = batch_size
-                
+        if self.name != 'cfl':
+            self.cfl_model = copy.deepcopy(self.base_model)
+            
         if self.name != 'sgd':
             self.num_clusters = num_clusters
             self.default_weights(env_Lp)
@@ -182,11 +184,15 @@ class FL_Modes(Nodes):
         for i, node in enumerate(self.nodeset):
             epochs = np.random.randint(1, 4) # Different local updates. Set to a number if homogenous training needed
     #           node.local_update(self.epochs) # Synchornous aggregation: Same # of epochs
-            node.local_update(epochs) # Asynchronous Aggregation            
+            node.model.to('cuda')
+            node.local_update(epochs) # Asynchronous Aggregation
             temp_loss.append(node.trgloss[-1])
+            node.model.to('cpu')
         self.avgtrgloss.append(sum(temp_loss)/self.num_nodes)
         
+        torch.cuda.empty_cache()
         del temp_loss
+        gc.collect()
         
     def test_round(self, cluster_set):
         temp_acc = []

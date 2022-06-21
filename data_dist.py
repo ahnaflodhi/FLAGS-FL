@@ -24,11 +24,12 @@ def data_iid(dataset, num_classes, num_nodes):
     dict_users = {i:[] for i in range(num_nodes)}
     node_list = list(range(num_nodes))
     random.shuffle(node_list)
-    print(node_list)
     for label in range(num_classes):
         vals = np.array_split(idx_list[label], num_nodes) #Creates num_nodes uniform splits
         for i,node in enumerate(node_list):
             dict_users[node] += list(vals[i])
+    for node in range(num_nodes):
+        rng.shuffle(dict_users[node])
     del node_list, idx_list, vals 
     return dict_users
 

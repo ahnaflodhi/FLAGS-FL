@@ -18,6 +18,7 @@ def arg_parser():
                         help = 'Aggregation-Proportion: Proportion of nodes in neighborhood for D2D aggregation : 0.0-1.0')
     parser.add_argument('-dist', type = str, default = 'niid', 
                         help = 'Data distribution mode (IID, non-IID, 1-class and 2-class non-IID: iid, niid, niid1 or niid2.')
+    parser.add_argument('-model', type = str, default = 'shallow', help = 'Define base model type to run the experiments')
     
     args = parser.parse_args()
     
