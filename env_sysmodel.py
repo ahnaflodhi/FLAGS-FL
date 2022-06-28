@@ -120,8 +120,7 @@ class FL_Modes(Nodes):
         self.rounds = num_rounds
         self.base_model = copy.deepcopy(base_model)
         self.batch_size = batch_size
-        if self.name != 'cfl':
-            self.cfl_model = copy.deepcopy(self.base_model)
+        self.cfl_model = copy.deepcopy(self.base_model)
             
         if self.name != 'sgd':
             self.num_clusters = num_clusters
@@ -186,11 +185,8 @@ class FL_Modes(Nodes):
     #           node.local_update(self.epochs) # Synchornous aggregation: Same # of epochs
             node.model.to('cuda')
             node.local_update(epochs) # Asynchronous Aggregation
-            temp_loss.append(node.trgloss[-1])
-            node.model.to('cpu')
+            
         self.avgtrgloss.append(sum(temp_loss)/self.num_nodes)
-        
-        torch.cuda.empty_cache()
         del temp_loss
         gc.collect()
         
@@ -201,13 +197,16 @@ class FL_Modes(Nodes):
             node.node_test()
             temp_acc.append(node.testacc[-1])
             temp_loss.append(node.testloss[-1])
+            
+            temp_loss.append(node.trgloss[-1])
+            
         self.avgtestacc.append(sum(temp_acc)/self.num_nodes)
         self.avgtestloss.append(sum(temp_loss)/self.num_nodes)
         
         # Calculate glolbal and cluter averages
         self.global_avgs()
         self.cluster_avgs(cluster_set)
-    
+        
     def ranking_round(self, rnd, mode):
         for node in self.nodeset:
             node.neighborhood_divergence(self.nodeset, self.cfl_model, div_mode = 'cfl_div', normalize = False)
@@ -265,7 +264,7 @@ class FL_Modes(Nodes):
 #             self.nodeset[ch_pair[1]].model = copy.deepcopy(self.nodeset[ch_pair[0]]).model
             self.nodeset[ch_pair[1]].model.load_state_dict(self.nodeset[ch_pair[0]].model.state_dict())    
     
-    def cfl_aggregate_round(self, prop,  weightage = 'equal'):
+    def cfl_aggregate_round(self, prop, flag,  weightage = 'equal'):
         if weightage == 'equal':
             scale = {i:1.0 for i in range(len(self.nodeset))}
 #         elif weightage == 'proportional':
@@ -279,10 +278,17 @@ class FL_Modes(Nodes):
 #         self.cfl_model = copy.deepcopy(agg_model)
         self.cfl_model.load_state_dict(agg_model.state_dict())
         del agg_model
-                          
-        for node in self.nodeset:
-#             node.model = copy.deepcopy(self.cfl_model)
-            node.model.load_state_dict(self.cfl_model.state_dict()) 
+        gc.collect()
+        if flag == 'CServer':
+            for node in self.nodeset:
+                node.model.load_state_dict(self.cfl_model.state_dict())
+                
+    def CH_select(self, cluster_set, cluster_head):
+        # Check number of epochs done since last selection, normalized loss, cosine similarity and closeness_centrality
+        for i, node in enumerate(self.nodeset):
+            node.average_epochloss = sum(self.nodeset.trgloss) / node.epochs
+            
+    
     
     def server_aggregate(self, cluster_id, cluster_set):
         ref_dict = self.nodeset[0].model.state_dict()

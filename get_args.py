@@ -21,5 +21,4 @@ def arg_parser():
     parser.add_argument('-model', type = str, default = 'shallow', help = 'Define base model type to run the experiments')
     
     args = parser.parse_args()
-    
     return args

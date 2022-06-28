@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision.models as models
 
+from utils import optimizer_to, scheduler_to
 
 class Net(nn.Module):
     def __init__(self, num_classes, in_ch, dataset):
@@ -74,7 +75,8 @@ class Net(nn.Module):
 # self.model, self.opt, self.trainset, self.trainloader, self.trgloss, self.trgacc, num_epochs   
 
 def node_update(client_model, optimizer, train_loader, record_loss, record_acc, epochs_done, num_epochs):
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.1)
+#     optimizer_to(optimizer, 'cuda')
+#     scheduler_to(scheduler, 'cuda')
     client_model.train()
     for epoch in range(num_epochs):
 #         epoch_loss = 0.0
@@ -88,23 +90,20 @@ def node_update(client_model, optimizer, train_loader, record_loss, record_acc, 
             output = client_model(data)
             loss = F.cross_entropy(output, targets)
             _ , output = torch.max(output.data, 1)
-            
             loss.backward()
             optimizer.step()
             correct += (output == targets).float().sum() / output.shape[0]
             batch_loss.append(loss.item())
             correct_state.append(correct.item())
-            print(f'Target {targets} Output {output}, correct {correct.item()}', end = ', ', flush = True)
 #             if batch_idx % 100 == 0:    # print every 100 mini-batches
 #                 print('[%d, %5d] loss-acc: %.3f - %.3f' %(epoch+1, batch_idx+1, sum(batch_loss)/len(batch_loss), sum(correct_state)/len(correct_state)))
-        epochs_done += 1
-        if epochs_done == 50: # Reduce LR after this many epocs.
-            scheduler.step()    
+#         if epochs_done > 0 and epochs_done % 20 == 0: # Reduce LR after this many epocs.
+#             scheduler.step()
+            
         epoch_loss = sum(batch_loss) / len(batch_loss)
         epoch_acc = sum(correct_state) / len(correct_state)
         record_loss.append(round(epoch_loss, 3))
         record_acc.append(round(epoch_acc,3))
-        print(f'Loss {epoch_loss}, Acc {epoch_acc}', end = ',  ',  flush = True)
 #     del data, targets, batch_loss
 #     del loss, output, correct_state
 #     del epoch_loss, epoch_acc

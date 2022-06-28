@@ -3,6 +3,7 @@ import torch
 import pickle
 import os
 
+
 def constrained_sum(n, total):
     """Return a randomly chosen list of n positive integers summing to total.
     Each such list is equally likely to occur.
@@ -35,6 +36,27 @@ def model_size(model):
     model_mb = (param_size + buffer_size) / 1024**2
 #     print('model size: {:.3f}MB'.format(model_mb))
     return model_mb
+
+def optimizer_to(optim, device):
+    for param in optim.state.values():
+        # Not sure there are any global tensors in the state dict
+        if isinstance(param, torch.Tensor):
+            param.data = param.data.to(device)
+            if param._grad is not None:
+                param._grad.data = param._grad.data.to(device)
+        elif isinstance(param, dict):
+            for subparam in param.values():
+                if isinstance(subparam, torch.Tensor):
+                    subparam.data = subparam.data.to(device)
+                    if subparam._grad is not None:
+                        subparam._grad.data = subparam._grad.data.to(device)
+
+def scheduler_to(sched, device):
+    for param in sched.__dict__.values():
+        if isinstance(param, torch.Tensor):
+            param.data = param.data.to(device)
+            if param._grad is not None:
+                param._grad.data = param._grad.data.to(device)
 
 
 def save_file(folder, status, flmode, modename, dataset, dist, num_nodes, num_clusters, num_epochs, num_rounds, starttime):

@@ -14,10 +14,9 @@ class Nodes:
     """
     Generates node status and recording dictionaries
     """
-    
     def __init__(self, node_idx: int, base_model: 'Net object', num_labels: int, in_channels: int, 
                  traindata, trg_dist:list, testdata, test_dist:list, dataset:str, batch_size:int,
-                 node_neighborhood: list, network_weights: list, lr = 0.1, wt_init = False, role = 'node'):
+                 node_neighborhood: list, network_weights: list, lr = 0.01, wt_init = False, role = 'node'):
         """
         Creates the Node Object.
         Contains methods for individual nodes to perform.
@@ -32,19 +31,21 @@ class Nodes:
         self.weights = network_weights[self.idx]
         self.role = role
         self.epochs = 0 # Time of creation -Assuming no learning has taken place. Necessary for LR scheduler
+        self.lr = lr # LR employed by node
         
         # Dataset and data dist related
         self.trainset = trg_dist[self.idx]
         self.trainloader = DataLoader(DataSubset(traindata, trg_dist, self.idx), batch_size = batch_size)
         self.testset = test_dist[self.idx]
         self.testloader = DataLoader(DataSubset(testdata, test_dist, self.idx))
-        self.base_model_selection(base_model, num_labels, in_channels, dataset, wt_init, lr)
+        self.base_model_selection(base_model, num_labels, in_channels, dataset, wt_init)
         
         # Recorders
         self.trgloss = []
         self.trgacc = []
         self.testloss = []
         self.testacc = []
+        self.average_epochloss = 0
         
         # Appending self-idx to record CFL divergence
         # Divergence Targets
@@ -53,21 +54,25 @@ class Nodes:
         self.divergence_conv_dict = {node:[] for node in div_targets}
         self.divergence_fc_dict = {node:[] for node in div_targets}  
         
-    def base_model_selection(self, base_model, num_labels, in_channels, dataset, wt_init, lr):
+    def base_model_selection(self, base_model, num_labels, in_channels, dataset, wt_init):
         # Same weight initialization
         self.model = copy.deepcopy(base_model)
 #         if wt_init == True:
 #             self.model.load_state_dict(base_mode.state_dict())
-        self.opt = optim.SGD(self.model.parameters(), lr = lr, momentum = 0.9)
+        self.opt = optim.SGD(self.model.parameters(), lr = self.lr) # , momentum = 0.9
+#         lambda_sch = lambda epoch: 1 * epoch
+#         self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.opt, lr_lambda= lambda_sch)
  
     def local_update(self, num_epochs):
+        # client_model, optimizer, scheduler, train_loader, record_loss, record_acc, epochs_done, num_epochs
         node_update(self.model, self.opt, self.trainloader, self.trgloss, self.trgacc, self.epochs, num_epochs)
-        print(f'Node-{self.idx}: Loss{self.trgloss[-1]} TrgAcc {self.trgacc[-1]}', end = ', ', flush = True)
+        self.epochs += num_epochs
+        print(f'Node-{self.idx}-Epochs{self.epochs}', end = ', ', flush = True)
 #         if len(self.trgloss) > 1:
 #             print(f'Node {self.idx} : Delta Trgloss = {self.trgloss[-2] - self.trgloss[-1]:0.3f}', end = ",  ", flush = True)
 #         else:
 #             print(f'Node {self.idx}: Trgloss = {self.trgloss[-1]:0.3f}', end = ",  ")
-    
+
     def node_test(self):
         test_loss, test_acc = test(self.model, self.testloader)
         self.testloss.append(test_loss)
