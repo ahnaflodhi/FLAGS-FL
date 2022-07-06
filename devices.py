@@ -67,7 +67,7 @@ class Nodes:
         # client_model, optimizer, scheduler, train_loader, record_loss, record_acc, epochs_done, num_epochs
         node_update(self.model, self.opt, self.trainloader, self.trgloss, self.trgacc, self.epochs, num_epochs)
         self.epochs += num_epochs
-        print(f'Node-{self.idx}-Epochs{self.epochs}', end = ', ', flush = True)
+        print(f'Node{self.idx}-{self.epochs}', end = ', ', flush = True)
 #         if len(self.trgloss) > 1:
 #             print(f'Node {self.idx} : Delta Trgloss = {self.trgloss[-2] - self.trgloss[-1]:0.3f}', end = ",  ", flush = True)
 #         else:
@@ -77,7 +77,7 @@ class Nodes:
         test_loss, test_acc = test(self.model, self.testloader)
         self.testloss.append(test_loss)
         self.testacc.append(test_acc)
-        print(f'Node {self.idx}: LR={self.opt.param_groups[0]["lr"]} Trg Loss= {self.trgloss[-1]:0.3f} Trg Acc= {self.trgacc[-1]}  Test Acc= {self.testacc[-1]:0.3f}', end = ", ", flush = True)
+        print(f'Node{self.idx}: LR={self.opt.param_groups[0]["lr"]} Trg Loss= {self.trgloss[-1]:0.3f} Trg Acc= {self.trgacc[-1]} Test Acc= {self.testacc[-1]:0.3f}', end = ", ", flush = True)
          
     def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2', div_mode ='cfl_div', normalize = False):
         div_dict = {node:None for node in self.neighborhood}
@@ -173,7 +173,7 @@ class Nodes:
         return scale
             
     def aggregate_nodes(self, nodeset, agg_prop, scale:dict, cluster_set = None):
-        #Choosing the #agg_count number of highest ranked nodes for aggregation
+        # Choosing the #agg_count number of highest ranked nodes for aggregation
         # If Node aggregating Nhood
         if cluster_set == None:
             agg_scope = int(np.floor(agg_prop * len(self.ranked_nhood)))
@@ -182,8 +182,7 @@ class Nodes:
                     agg_targets = self.ranked_nhood[:agg_scope]
                     agg_targets.append(self.idx)
                 except:
-                    print(f'Agg_scope:{agg_scope} does not conform to neighborhood {len(self.ranked_nhood)}')
-                    
+                    print(f'Agg_scope:{agg_scope} does not conform to neighborhood {len(self.ranked_nhood)}')        
         # If CH aggregating Cluster    
         else:
             agg_scope = int(np.floor(agg_prop * len(cluster_set)))
@@ -191,6 +190,7 @@ class Nodes:
                 try:
                     # No need to add self index since cluster-head id already included in cluster-set
                     agg_targets = random.sample(cluster_set, agg_scope)
+                    agg_targets.append(self.idx)
                 except:
                     print(f'Agg_scope {agg_scope} does not conform to size of Cluster_Set {len(cluster_set)}')
 
@@ -224,24 +224,19 @@ class Servers:
     def aggregate_servers(self, server_set, nodeset):
         scale = {server_id:1.0 for server_id in range(len(server_set)) }
         global_model = aggregate(server_set, list(range(len(server_set))), scale)
-#         self.model = copy.deepcopy(global_model)
         self.model.load_state_dict(global_model.state_dict())
-        del global_model
 
         for server in server_set:
-#             server.model = copy.deepcopy(self.model)
             server.model.load_state_dict(self.model.state_dict())
             
         for node in nodeset:
-#             node.model = copy.deepcopy(self.model)
             node.model.load_state_dict(self.model.state_dict())
+        del global_model
         gc.collect()
         
-    def aggregate_clusters(self, nodeset, assigned_nodes, prop):
+    def aggregate_clusters(self, nodeset, assigned_nodes, scale, prop):
         nodelist = random.sample(assigned_nodes, int(prop*len(assigned_nodes)))
-        scale = {node:1.0 for node in nodelist}
         server_agg_model = aggregate(nodeset, nodelist, scale)
-#         self.model = copy.deepcopy(server_agg_model)
         self.model.load_state_dict(server_agg_model.state_dict())
         del server_agg_model
         gc.collect()

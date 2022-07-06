@@ -125,7 +125,7 @@ class FL_Modes(Nodes):
         if self.name != 'sgd':
             self.num_clusters = num_clusters
             self.num_nodes = num_nodes
-            self.default_nodeweights(traindata, traindata_dist, scale = 'proportional')
+            self.nodeweights(traindata, traindata_dist, scale = 'one')
             self.form_nodeset(num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, nhood)
             
             # Aggregation Flags
@@ -145,16 +145,7 @@ class FL_Modes(Nodes):
         self.avgtrgacc = []
         self.avgtestacc = []
         
-        FL_Modes.modes_list.append(self.name)
-        
-#     def __getstate__(self):
-#         """Returns objects to be pickled"""
-#         data = self.__dict__.copy()
-#         list = ['avgtrgacc', 'avgtrgloss', 'avgtestacc', 'avgtestloss', 'trgacc', 'trgloss', 'testacc', 'testloss', 
-#                 'cluster_trgacc', 'cluster_trgloss', 'cluster_testacc', 'cluster_testloss',
-#                'degree', 'dist', 'divergence_dict', 'divergence_conv_dict', 'divergence_fc_dict']
-#         del data['nodeset]
-#         return state       
+        FL_Modes.modes_list.append(self.name)      
 
     def form_nodeset(self, num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, nhood):
         # base_model, num_labels, in_channels, traindata, trg_dist, testdata, test_dist, dataset, batch_size, node_neighborhood
@@ -176,17 +167,16 @@ class FL_Modes(Nodes):
         """ Edge Weights for the environment graph"""
         self.edge_weights = Laplacian.toarray()
         
-    def default_nodeweights(self, traindata, traindata_dist, scale = 'proportioal'):  
-        """ Node weights based on either the total number of network nodes or # of trg datasamples"""
-        if scale == 'equal':
+    def nodeweights(self, traindata, traindata_dist, scale = 'one'):  
+        """ Node weights based on either the total number of network nodes, # of trg datasamples or 1s"""
+        if scale == 'degree':
             self.weights ={i:1.0/self.num_nodes for i in range(self.num_nodes)}
             
         elif scale == 'proportional':
             self.weights = {i:len(traindata_dist[i])/len(traindata) for i in range(self.num_nodes)}
-    
-    def default_clusterweights(self, traindata, traindata_dist, scale = 'proportional'):
-        pass
-                
+        
+        elif scale == 'one':
+            self.weights = {i:1.0 for i in range(self.num_nodes)}                
          
     def update_round(self):
         """
@@ -195,7 +185,6 @@ class FL_Modes(Nodes):
         temp_loss = []
         for i, node in enumerate(self.nodeset):
             epochs = np.random.randint(1, 4) # Different local updates. Set to a number if homogenous training needed
-    #           node.local_update(self.epochs) # Synchornous aggregation: Same # of epochs
             node.model.to('cuda')
             node.local_update(epochs) # Asynchronous Aggregation
             
@@ -248,7 +237,7 @@ class FL_Modes(Nodes):
         for node_pair in node_pairs:
             aggregate(self.nodeset, node_pair, self.weights)
             
-    def clshead_aggregate_round(self, cluster_head, cluster_set, agg_prop, weightage = 'equal'):
+    def clshead_aggregate_round(self, cluster_head, cluster_set, agg_prop):
         self.nodeset[cluster_head].aggregate_nodes(self.nodeset, agg_prop, self.weights, cluster_set = cluster_set)
         # Load CH model on all cluster nodes
         for node in cluster_set:
@@ -278,7 +267,6 @@ class FL_Modes(Nodes):
         gc.collect()
     
     def cfl_aggregate_round(self, prop, flag):
-        
         nodelist = list(range(self.num_nodes))
         agg_count = int(np.floor(prop * len(nodelist)))
         if agg_count < 1:
@@ -287,19 +275,20 @@ class FL_Modes(Nodes):
         sel_nodes = random.sample(nodelist, agg_count) # Random Sampling
         agg_model = aggregate(self.nodeset, sel_nodes, self.weights)
         self.cfl_model.load_state_dict(agg_model.state_dict())
-        del agg_model
-        gc.collect()
+
         if flag == 'CServer':
             for node in self.nodeset:
                 node.model.load_state_dict(self.cfl_model.state_dict())
+        
+        del agg_model
+        gc.collect()
                 
 #     def CH_select(self, cluster_set, cluster_head):
 #         # Check number of epochs done since last selection, normalized loss, cosine similarity and closeness_centrality
 #         for i, node in enumerate(self.nodeset):
 #             node.average_epochloss = sum(self.nodeset.trgloss) / node.epochs
 #         close_cent = 
-    
-    
+       
     def server_aggregate(self, cluster_id, cluster_set):
         ref_dict = self.nodeset[0].model.state_dict()
         for cluster in cluster_id:

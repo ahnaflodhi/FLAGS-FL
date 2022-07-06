@@ -59,8 +59,8 @@ def scheduler_to(sched, device):
                 param._grad.data = param._grad.data.to(device)
 
 
-def save_file(folder, status, flmode, modename, dataset, dist, num_nodes, num_clusters, num_epochs, num_rounds, starttime):
-    file_name = status + '_' +str(modename).upper() + '_' + dataset.upper() + '_' + dist.upper()  + '_' +'n'+ str(num_nodes)  + '_' + 'c' + str(num_clusters) + '_' +'e' + str(num_epochs) + '_' + 'r' + str(num_rounds) + '_' + starttime
+def save_file(folder, status, flmode, modename, dataset, dist, num_nodes, num_clusters, num_epochs, num_rounds, prop, agg_prop, starttime):
+    file_name = status + '_' +str(modename).upper() + '_' + dataset.upper() + '_' + dist.upper()  + '_' +'n'+ str(num_nodes)  + '_' + 'c' + str(num_clusters) + '_' +'e' + str(num_epochs) + '_' + 'r' + str(num_rounds) + '_' + 'prop' + str(prop) + '_' + 'aggprop' + str(agg_prop) +'_' +  starttime
     file_name = os.path.join(folder, file_name)
     saved_set = {}
     if modename != 'sgd':

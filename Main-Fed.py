@@ -32,14 +32,17 @@ agg_prop = args.aggprop
 servers = args.ser
 modeltype = args.model
 
-#  'ch_d2d':None, 'int_ch': None, 'gossip':None, 'hgossip':None, 
-modes_list = {'chd2d':None, 'intch': None, 'intchd2d': None, 'd2d':None, 'cfl': None, 'sgd' : None}
+#  'ch_d2d':None, 'int_ch': None, 'gossip':None, 'hgossip':None
+# modes_list = {'chd2d':None, 'intch': None, 'intchd2d': None, 'd2d':None, 'cfl': None, 'sgd' : None}
+# 'd2d': d2d_flags, 'hd2d': hd2d_flags, 'hfl': hfl_flags, 'chd2d':chd2d_flags, 'intch': intch_flags, 'intchd2d':intchd2d_flags, 'gossip':gossip_flags, 'hgossip':hgossip_flags, 'cfl':cfl_flags, 'sgd':None
+                 
+modes_list = {'d2d':None, 'hd2d': None, 'hfl': None, 'gossip':None, 'hgossip':None, 'cfl': None, 'sgd' : None}
 
 def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 
           num_epochs, shard_size, overlap, dist, prop, agg_prop):
     
     # Step 1: Define parameters for the environment, dataset and dataset distribution
-    starttime = time.strftime("%Y%m%d-%H%M")
+    starttime = time.strftime("%Y%m%d_%H%M")
     location, num_labels = dataset_approve(dataset)
     
     if model_type == 'shallow':
@@ -130,28 +133,18 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
             
             # Start Federation Protocol
             for rnd in range(num_rounds):
-#                 ### Move Mode-models to cuda
-#                 if hasattr(modes[mode], 'serverset'):
-#                     for server in modes[mode].serverset:
-#                         server.model.to('cuda')
-#                 if mode != 'cfl':
-#                     modes[mode].cfl_model.to('cuda')
-#                 print(f'The Cuda Summary before update {torch.cuda.memory_summary()}')
                 # Initiate Local Training on models
                 print(f'Update Round {rnd}- Mode {mode}') 
                 modes[mode].update_round()
-#                 print(f'The Cuda Summary after update {torch.cuda.memory_summary()}')
-
+            
                 # Perform Testing on Locally trained/fine-tuned models
                 modes[mode].test_round(env.cluster_set)
-#                 print(f'The Cuda Summary before test {torch.cuda.memory_summary()}')
 
                 # Share models with neighbors
                 # Add noise / Share partials / 
 
                 # Perform Neighborhood analysis and update weights assigned to neighbors
 #                 modes[mode].ranking_round(rnd, mode)
-#                 print(f'The Cuda Summary after ranking {torch.cuda.memory_summary()}')
 
                 #4-Aggregate from neighborhood  using the weights obtained in the previous step
                 print(f'Starting Local Aggregation in round{rnd} for mode {mode}')
@@ -165,27 +158,24 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
 
 #                 elif modes[mode].d2d_agg_flg == 'CServer':
 #                     modes[mode].cfl_aggregate_round(prop)
-#                 print(f'The Cuda Summary after aggregation {torch.cuda.memory_summary()}')
 
                 # 5- Cluster operations: 
                 if modes[mode].ch_agg_flg == True:
                     print(f'Entering Cluster Head Aggregation for mode-{mode} in round-{rnd}')
                     for i in range(env.num_clusters):
-                        modes[mode].clshead_aggregate_round(env.cluster_heads[i], env.cluster_set[i], agg_prop)
+                        modes[mode].clshead_aggregate_round(env.cluster_heads[i], env.cluster_set[i], 0.9) # Added 0.9 instead of agg_prop
 
                 if modes[mode].inter_ch_agg_flg == True:
                     modes[mode].inter_ch_aggregate_round(env.cluster_heads)
-#                 print(f'The Cuda Summary after cluster operation {torch.cuda.memory_summary()}')
-
+                    
                 # Should not be executed for Clustered D2D-FL
                 if modes[mode].hserver_agg_flg == True: 
                     print(f'Entering Hierarchical Aggregation for mode-{mode} in round-{rnd}')
-                    assigned_nodes = []
                     for i in range(env.num_servers):
+                        assigned_nodes = []
                         for cluster_id in env.server_groups[i]:
                             assigned_nodes += env.cluster_set[cluster_id] 
-                        modes[mode].serverset[i].aggregate_clusters(modes[mode].nodeset, assigned_nodes, prop)
-#                     print(f'The Cuda Summary after Hserver aggregation {torch.cuda.memory_summary()}')
+                        modes[mode].serverset[i].aggregate_clusters(modes[mode].nodeset, assigned_nodes, modes[mode].weights, prop)
 
                     #Final Server Aggregation
                     modes[mode].serverset[-1].aggregate_servers(modes[mode].serverset[:-1], modes[mode].nodeset)
@@ -195,14 +185,15 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
                     file_args['folder'] = './'
                     file_args['status'] = 'inter'
                     file_args['flmode'] = modes[mode]
+                    file_args['prop'] = prop
+                    file_args['agg_prop'] = agg_prop
                     save_file(**file_args)
-            
-            for node in modes[mode].nodeset:
-                node.model.to('cpu')
                         
             file_args['folder'] = './Results'
             file_args['status'] = 'Final'
             file_args['flmode'] = modes[mode]
+            file_args['prop'] = prop
+            file_args['agg_prop'] = agg_prop
             save_file(**file_args)
                      
             for node in modes[mode].nodeset:
@@ -233,6 +224,8 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
             
             file_args['folder'] = './Results'
             file_args['status'] = 'Final'
+            file_args['prop'] = prop
+            file_args['agg_prop'] = agg_prop
             file_args['flmode'] = modes[mode]
             save_file(**file_args)
             
