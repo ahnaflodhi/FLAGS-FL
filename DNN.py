@@ -109,25 +109,27 @@ def node_update(client_model, optimizer, train_loader, record_loss, record_acc, 
 #     del epoch_loss, epoch_acc
 #     gc.collect()
     
-def aggregate(model_list, node_list, scale, noise = False):
+def aggregate(model_list, node_list:list, scale:dict, noise = False):
     agg_model = copy.deepcopy(model_list[0].model)
-    ref_dict = copy.deepcopy(agg_model.state_dict())
-    if noise == True: # Create copies so that original models are not corrupted. Only received ones become noisy
-        models = [copy.deepcopy(model_list[node].model) for node in node_list]
-        models = [Net.add_noise(model) for model in models]
-        for k in ref_dict.keys():
-            ref_dict[k] = torch.stack([models[i].state_dict()[k].float() for i, _ in enumerate(node_list)], 0).mean(0)
-        del models
-        
-    else:
-        for k in ref_dict.keys():
-            ref_dict[k] = torch.stack([model_list[i].model.state_dict()[k].float() for i, _ in enumerate(node_list)], 0).mean(0)
-    gc.collect()
-#         for k in ref_dict.keys():
-#             ref_dict[k] = torch.stack([torch.mul(models[i].state_dict()[k].float(), scale[node]) for i, node in enumerate(node_list)], 0).mean(0)
+    # Zeroing container model- Necessary so that scaling weights may be assigned to each participating model
+    for layer in agg_model.state_dict().keys():
+        agg_model.state_dict()[layer].mul_(0.00)
     
-    agg_model.load_state_dict(ref_dict)
-    gc.collect()
+    if noise == True: # Create copies so that original models are not corrupted. Only received ones become noisy
+        models = [Net.add_noise(copy.deepcopy(model_list[node].model)) for node in node_list]
+        for layer in agg_model.state_dict().keys():
+            for node in node_list:
+                agg_model.state_dict()[layer].add_(torch.mul_(models[node].state_dict()[layer], scale[node]))
+            agg_model.state_dict()[layer].div_(len(node_list))
+        del models
+        gc.collect()
+        
+    else: # Without adding Noise
+        for layer in agg_model.state_dict().keys():
+            for node in node_list:
+                agg_model.state_dict()[layer].add_(torch.mul(model_list[node].model.state_dict()[layer], scale[node]))
+            agg_model.state_dict()[layer].div_(len(node_list))
+        
     return agg_model
 
 def model_checker(model1, model2):

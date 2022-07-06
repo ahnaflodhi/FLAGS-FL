@@ -14,9 +14,10 @@ class Nodes:
     """
     Generates node status and recording dictionaries
     """
+    #idx, self.base_model, num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, self.dataset, self.batch_size, node_n_nhood
     def __init__(self, node_idx: int, base_model: 'Net object', num_labels: int, in_channels: int, 
                  traindata, trg_dist:list, testdata, test_dist:list, dataset:str, batch_size:int,
-                 node_neighborhood: list, network_weights: list, lr = 0.01, wt_init = False, role = 'node'):
+                 node_neighborhood: list, lr = 0.01, wt_init = False, role = 'node'):
         """
         Creates the Node Object.
         Contains methods for individual nodes to perform.
@@ -28,7 +29,6 @@ class Nodes:
         self.neighborhood = node_neighborhood
         self.ranked_nhood = node_neighborhood
         self.degree = len(self.neighborhood)
-        self.weights = network_weights[self.idx]
         self.role = role
         self.epochs = 0 # Time of creation -Assuming no learning has taken place. Necessary for LR scheduler
         self.lr = lr # LR employed by node
@@ -172,7 +172,7 @@ class Nodes:
         scale = {node:1.0 for node in self.neighborhood}
         return scale
             
-    def aggregate_nodes(self, nodeset, agg_prop, weightage, cluster_set = None):
+    def aggregate_nodes(self, nodeset, agg_prop, scale:dict, cluster_set = None):
         #Choosing the #agg_count number of highest ranked nodes for aggregation
         # If Node aggregating Nhood
         if cluster_set == None:
@@ -183,6 +183,7 @@ class Nodes:
                     agg_targets.append(self.idx)
                 except:
                     print(f'Agg_scope:{agg_scope} does not conform to neighborhood {len(self.ranked_nhood)}')
+                    
         # If CH aggregating Cluster    
         else:
             agg_scope = int(np.floor(agg_prop * len(cluster_set)))
@@ -192,23 +193,18 @@ class Nodes:
                     agg_targets = random.sample(cluster_set, agg_scope)
                 except:
                     print(f'Agg_scope {agg_scope} does not conform to size of Cluster_Set {len(cluster_set)}')
-        scale = self.scale_update(weightage)
+
         agg_model = aggregate(nodeset, agg_targets, scale)
-#         self.model = copy.deepcopy(agg_model)
+        
         self.model.load_state_dict(agg_model.state_dict())
         del agg_model
         gc.collect()
         
-    def aggregate_random(self, nodeset, weightage):
+    def aggregate_random(self, nodeset, scale):
         target_id = self.idx
         while target_id == self.idx:
             target_id = random.sample(list(range(len(nodeset))), 1)[0]
-        node_list = [self.idx, target_id]
-        if weightage  == 'equal':
-            scale = {node:1.0 for node in node_list}
-        elif weightage == 'proportional':
-            scale = {node:1.0 for node in node_list}
-                     
+        node_list = [self.idx, target_id]                     
         agg_model = aggregate(nodeset, node_list, scale)
 #         self.model = copy.deepcopy(agg_model)
         self.model.load_state_dict(agg_model.state_dict())

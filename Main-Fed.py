@@ -33,7 +33,7 @@ servers = args.ser
 modeltype = args.model
 
 #  'ch_d2d':None, 'int_ch': None, 'gossip':None, 'hgossip':None, 
-modes_list = {'ch_d2d':None, 'int_ch': None, 'intch_d2d': None, 'd2d':None, 'cfl': None, 'sgd' : None}
+modes_list = {'chd2d':None, 'intch': None, 'intchd2d': None, 'd2d':None, 'cfl': None, 'sgd' : None}
 
 def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 
           num_epochs, shard_size, overlap, dist, prop, agg_prop):
@@ -93,18 +93,19 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
                    'nhood' : env.neighborhood_map, 'env_Lp' : env.Lp, 'num_clusters' : num_clusters,
                    'num_servers': env.num_servers}
     
+    # Flags will only be used for the modes defined at the outset of the main file
     d2d_flags = {'d2d_agg_flg' : 'D2D', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
     hd2d_flags = {'d2d_agg_flg' : 'D2D', 'ch_agg_flg': False, 'hserver_agg_flg': True, 'inter_ch_agg_flg': False}
     hfl_flags = {'d2d_agg_flg' : False, 'ch_agg_flg': False, 'hserver_agg_flg': True, 'inter_ch_agg_flg': False}
     chd2d_flags = {'d2d_agg_flg' : 'D2D', 'ch_agg_flg': True, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
     intch_flags = {'d2d_agg_flg' : False, 'ch_agg_flg': True, 'hserver_agg_flg': False, 'inter_ch_agg_flg': True}
-    intchd2d_flags = {'d2d_agg_flg' : True, 'ch_agg_flg': True, 'hserver_agg_flg': False, 'inter_ch_agg_flg': True}
-    gossip_flg = {'d2d_agg_flg' : 'Random', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
-    hgossip_flg = {'d2d_agg_flg' : 'Random', 'ch_agg_flg': False, 'hserver_agg_flg': True, 'inter_ch_agg_flg': False}
-    cfl_flg = {'d2d_agg_flg' : 'CServer', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
+    intchd2d_flags = {'d2d_agg_flg' : 'D2D', 'ch_agg_flg': True, 'hserver_agg_flg': False, 'inter_ch_agg_flg': True}
+    gossip_flags = {'d2d_agg_flg' : 'Random', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
+    hgossip_flags = {'d2d_agg_flg' : 'Random', 'ch_agg_flg': False, 'hserver_agg_flg': True, 'inter_ch_agg_flg': False}
+    cfl_flags = {'d2d_agg_flg' : 'CServer', 'ch_agg_flg': False, 'hserver_agg_flg': False, 'inter_ch_agg_flg': False}
     
-    flag_dict = {'d2d': d2d_flags, 'hd2d': hd2d_flags, 'hfl': hfl_flags, 'ch_d2d':chd2d_flags, 'int_ch': intch_flags, 'intch_d2d':intchd2d_flags,
-                 'gossip':gossip_flg, 'hgossip':hgossip_flg, 'cfl':cfl_flg, 'sgd':None}
+    flag_dict = {'d2d': d2d_flags, 'hd2d': hd2d_flags, 'hfl': hfl_flags, 'chd2d':chd2d_flags, 'intch': intch_flags, 'intchd2d':intchd2d_flags,
+                 'gossip':gossip_flags, 'hgossip':hgossip_flags, 'cfl':cfl_flags, 'sgd':None}
     
     # Step-5: Create Modes and combine mode params and special flags for all modes under mode_params
     mode_params = {mode:None for mode in modes.keys()}

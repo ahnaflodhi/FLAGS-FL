@@ -112,7 +112,7 @@ class FL_Modes(Nodes):
         # Kwargs include d2d_agg_flg, ch_agg_flg, hserver_agg_flg, 
         
         super().__init__(1, base_model, num_labels, in_channels, traindata, traindata_dist, 
-                         testdata, testdata_dist, dataset, batch_size, [0,0], [0,0])
+                         testdata, testdata_dist, dataset, batch_size, [0,0])
         self.name = name
         self.dataset = dataset
         self.dist = dist
@@ -124,10 +124,10 @@ class FL_Modes(Nodes):
             
         if self.name != 'sgd':
             self.num_clusters = num_clusters
-            self.default_weights(env_Lp)
             self.num_nodes = num_nodes
+            self.default_nodeweights(traindata, traindata_dist, scale = 'proportional')
             self.form_nodeset(num_labels, in_channels, traindata, traindata_dist, testdata, testdata_dist, nhood)
-
+            
             # Aggregation Flags
             self.d2d_agg_flg = kwargs['d2d_agg_flg']
             self.ch_agg_flg = kwargs['ch_agg_flg']
@@ -163,7 +163,7 @@ class FL_Modes(Nodes):
             node_n_nhood = nhood[idx]
 #             node_n_nhood.append(idx)
             self.nodeset.append(Nodes(idx, self.base_model, num_labels, in_channels, traindata, traindata_dist, 
-                                      testdata, testdata_dist, self.dataset, self.batch_size, node_n_nhood, self.weightset))
+                                      testdata, testdata_dist, self.dataset, self.batch_size, node_n_nhood))
     
     def form_serverset(self, num_servers, num_labels, in_channels, dataset):
         self.serverset = []
@@ -172,8 +172,21 @@ class FL_Modes(Nodes):
         #Append 1-additioal server to act as a Global server
         self.serverset.append(Servers(num_servers, self.base_model))
         
-    def default_weights(self, Laplacian):
-        self.weightset = Laplacian.toarray()
+    def graph_weights(self, Laplacian):
+        """ Edge Weights for the environment graph"""
+        self.edge_weights = Laplacian.toarray()
+        
+    def default_nodeweights(self, traindata, traindata_dist, scale = 'proportioal'):  
+        """ Node weights based on either the total number of network nodes or # of trg datasamples"""
+        if scale == 'equal':
+            self.weights ={i:1.0/self.num_nodes for i in range(self.num_nodes)}
+            
+        elif scale == 'proportional':
+            self.weights = {i:len(traindata_dist[i])/len(traindata) for i in range(self.num_nodes)}
+    
+    def default_clusterweights(self, traindata, traindata_dist, scale = 'proportional'):
+        pass
+                
          
     def update_round(self):
         """
@@ -221,11 +234,11 @@ class FL_Modes(Nodes):
             elif sort_crit == 'fc':
                 self.apply_ranking(node, self.div_fc_dict[node], rnd, sort_scope, sort_type)
                 
-    def nhood_aggregate_round(self, agg_prop, weightage = 'equal'):
+    def nhood_aggregate_round(self, agg_prop):
         for node in self.nodeset:
-            node.aggregate_nodes(self.nodeset, agg_prop, weightage)
+            node.aggregate_nodes(self.nodeset, agg_prop, self.weights)
             
-    def random_aggregate_round(self, weightage = 'equal'):
+    def random_aggregate_round(self):
         node_pairs = []
         node_list = list(range(len(self.nodeset)))
         while len(node_list) > 1:
@@ -233,17 +246,16 @@ class FL_Modes(Nodes):
             node_list = [item for item in node_list if item not in temp]
             node_pairs.append(temp)
         for node_pair in node_pairs:
-            scale = {node:1.0 for node in node_pair}
-            aggregate(self.nodeset, node_pair, scale)
+            aggregate(self.nodeset, node_pair, self.weights)
             
     def clshead_aggregate_round(self, cluster_head, cluster_set, agg_prop, weightage = 'equal'):
-        self.nodeset[cluster_head].aggregate_nodes(self.nodeset, agg_prop, weightage, cluster_set = cluster_set)
+        self.nodeset[cluster_head].aggregate_nodes(self.nodeset, agg_prop, self.weights, cluster_set = cluster_set)
         # Load CH model on all cluster nodes
         for node in cluster_set:
             self.nodeset[node].model = copy.deepcopy(self.nodeset[cluster_head].model)
 #             self.nodeset[node].model.load_state_dict(self.nodeset[cluster_head].model.state_dict())
     
-    def inter_ch_aggregate_round(self, cluster_heads_list, weigtage = 'equal'):
+    def inter_ch_aggregate_round(self, cluster_heads_list):
         random.shuffle(cluster_heads_list)
         cluster_heads = copy.deepcopy(cluster_heads_list) # The new list will be changed, hence a copy of the original
         ch_pairs = []
@@ -259,23 +271,21 @@ class FL_Modes(Nodes):
                 ch_pairs.append(temp)
                 
         for ch_pair in ch_pairs:
-            scale = {ch:1.0 for ch in cluster_heads}
-            aggregate(self.nodeset, ch_pair, scale)
-#             self.nodeset[ch_pair[1]].model = copy.deepcopy(self.nodeset[ch_pair[0]]).model
-            self.nodeset[ch_pair[1]].model.load_state_dict(self.nodeset[ch_pair[0]].model.state_dict())    
+            agg_model = aggregate(self.nodeset, ch_pair, self.weights)
+            for node in ch_pair:
+                self.nodeset[node].model.load_state_dict(agg_model.state_dict()) 
+        del agg_model
+        gc.collect()
     
-    def cfl_aggregate_round(self, prop, flag,  weightage = 'equal'):
-        if weightage == 'equal':
-            scale = {i:1.0 for i in range(len(self.nodeset))}
-#         elif weightage == 'proportional':
-#             scale = {i:self.nodeset[i].divergence_dict[i][-1] for i in range(len(self.nodeset))}
+    def cfl_aggregate_round(self, prop, flag):
+        
         nodelist = list(range(self.num_nodes))
         agg_count = int(np.floor(prop * len(nodelist)))
         if agg_count < 1:
             agg_count = 1
+            
         sel_nodes = random.sample(nodelist, agg_count) # Random Sampling
-        agg_model = aggregate(self.nodeset, sel_nodes, scale)
-#         self.cfl_model = copy.deepcopy(agg_model)
+        agg_model = aggregate(self.nodeset, sel_nodes, self.weights)
         self.cfl_model.load_state_dict(agg_model.state_dict())
         del agg_model
         gc.collect()
@@ -283,11 +293,11 @@ class FL_Modes(Nodes):
             for node in self.nodeset:
                 node.model.load_state_dict(self.cfl_model.state_dict())
                 
-    def CH_select(self, cluster_set, cluster_head):
-        # Check number of epochs done since last selection, normalized loss, cosine similarity and closeness_centrality
-        for i, node in enumerate(self.nodeset):
-            node.average_epochloss = sum(self.nodeset.trgloss) / node.epochs
-            
+#     def CH_select(self, cluster_set, cluster_head):
+#         # Check number of epochs done since last selection, normalized loss, cosine similarity and closeness_centrality
+#         for i, node in enumerate(self.nodeset):
+#             node.average_epochloss = sum(self.nodeset.trgloss) / node.epochs
+#         close_cent = 
     
     
     def server_aggregate(self, cluster_id, cluster_set):
