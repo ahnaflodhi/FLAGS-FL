@@ -186,7 +186,7 @@ class FL_Modes(Nodes):
         for i, node in enumerate(self.nodeset):
             epochs = np.random.randint(1, 4) # Different local updates. Set to a number if homogenous training needed
             node.model.to('cuda')
-            node.local_update(epochs) # Asynchronous Aggregation
+            node.local_update(epochs) # Asynchronous Aggregation. Change epochs to self.epochs for synchronous operation.
             
         self.avgtrgloss.append(sum(temp_loss)/self.num_nodes)
         del temp_loss

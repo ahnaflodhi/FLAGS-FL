@@ -57,11 +57,16 @@ class Net(nn.Module):
     
     @staticmethod
     def add_noise(model, mean = [0.0], std = [0.01]):
+        if next(model.parameters()).is_cuda:
+            device = 'cuda'
+        else:
+            device = 'cpu'
+            
         norm_dist = torch.distributions.Normal(loc = torch.tensor(mean), scale = torch.tensor(std))
         for layer in model.state_dict():
             if 'weight' in layer:
                 x = model.state_dict()[layer]
-                t = norm_dist.sample((x.view(-1).size())).reshape(x.size()).cuda()
+                t = norm_dist.sample((x.view(-1).size())).reshape(x.size()).to(device)
                 model.state_dict()[layer].add_(t)
         return model
    
@@ -120,7 +125,6 @@ def aggregate(model_list, node_list:list, scale:dict, noise = True):
         models = {node:Net.add_noise(copy.deepcopy(model_list[node].model)) for node in node_list}
         for layer in agg_model.state_dict().keys():
             for node in node_list:
-                print(node)
                 agg_model.state_dict()[layer].add_(torch.mul(models[node].state_dict()[layer], scale[node]))
             agg_model.state_dict()[layer].div_(len(node_list))
         del models
