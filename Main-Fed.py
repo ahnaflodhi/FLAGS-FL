@@ -1,8 +1,8 @@
 import os
-# os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID";
+os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID";
 
-# # #The GPU id to use, usually either "0" or "1";
-# os.environ["CUDA_VISIBLE_DEVICES"]="2"
+# #The GPU id to use, usually either "0" or "1";
+os.environ["CUDA_VISIBLE_DEVICES"]="2"
 import sys, argparse
 import pickle
 import time
@@ -24,22 +24,23 @@ clusters = args.c
 epochs = args.e
 rounds = args.r
 overlap_factor = args.o
-shards =args.s
+skew =args.s
 dist_mode = args.dist
 test_batch_size = args.t
 prop = args.prop
 agg_prop = args.aggprop
 servers = args.ser
 modeltype = args.model
+alpha = args.a
 
 #  'ch_d2d':None, 'int_ch': None, 'gossip':None, 'hgossip':None
 # modes_list = {'chd2d':None, 'intch': None, 'intchd2d': None, 'd2d':None, 'cfl': None, 'sgd' : None}
 # 'd2d': d2d_flags, 'hd2d': hd2d_flags, 'hfl': hfl_flags, 'chd2d':chd2d_flags, 'intch': intch_flags, 'intchd2d':intchd2d_flags, 'gossip':gossip_flags, 'hgossip':hgossip_flags, 'cfl':cfl_flags, 'sgd':None
                  
-modes_list = {'d2d':None, 'hd2d': None, 'hfl': None, 'gossip':None, 'hgossip':None, 'cfl': None, 'sgd' : None}
+modes_list = {'d2d':None, 'chd2d':None, 'intch': None, 'intchd2d': None, 'gossip' : None,  'cfl': None, 'sgd' : None}
 
 def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 
-          num_epochs, shard_size, overlap, dist, prop, agg_prop):
+          num_epochs, skew, overlap, dist, prop, agg_prop):
     
     # Step 1: Define parameters for the environment, dataset and dataset distribution
     starttime = time.strftime("%Y%m%d_%H%M")
@@ -71,16 +72,10 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
 
     #### Step 3: Divide data among the nodes according to the distribution IID or non-IID
     # Call data_iid/ data_noniid from data_dist
-    if dist == 'iid':
-        train_dist = data_iid(traindata, num_labels, num_nodes)
-    elif dist == 'niid':
-        train_dist = data_noniid(traindata, num_nodes, shard_size)
-    elif dist == 'niid1':
-        skew = 1
-        train_dist = niid_skew_dist(traindata, num_labels, num_nodes, skew, shard_size)
-    elif dist == 'niid2':
-        skew = 2
-        train_dist = niid_skew_dist(traindata, num_labels, num_nodes, skew, shard_size)
+    if skew == 0:
+        train_dist = data_noniid(traindata, num_labels, num_nodes, alpha)
+    else:
+        train_dist = niid_skew_dist(traindata, num_labels, num_nodes, skew)
     
     # Uniform Test distribution for each node. The testing may be carried out on the entire datset
     test_dist = data_iid(testdata, num_labels, num_nodes)
@@ -235,4 +230,4 @@ def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, nu
 ## Main Function
 if __name__ == "__main__":
 #     dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_rounds, num_epochs, shard_size, overlap, dist
-    mode_state = D2DFL(modeltype, dataset, batch_size, test_batch_size, modes_list,  nodes, clusters, servers, rounds, epochs, shards, overlap_factor, dist_mode, prop, agg_prop)
+    mode_state = D2DFL(modeltype, dataset, batch_size, test_batch_size, modes_list,  nodes, clusters, servers, rounds, epochs, skew, overlap_factor, dist_mode, prop, agg_prop)
