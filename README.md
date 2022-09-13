@@ -1,4 +1,4 @@
-#FLAGS-Fl
+##FLAGS-FL
 Multi Federated Learning solution in Python using Pytorch for learning operations
 Usage:
 
