@@ -138,6 +138,30 @@ def aggregate(model_list, node_list:list, scale:dict, noise = True):
         
     return agg_model
 
+def selctive_aggregate(model_list, agg_full:list, scale:dict, agg_conv = None, noise = False):
+    agg_model = copy.deepcopy(model_list[0].model)
+    # Zeroing container model so that scaling weights may be assigned to each participating model
+    for layer in agg_model.state_dict().keys():
+        agg_model.state_dict()[layer].mul_(0.00)
+    
+    if noise == True: # Create copies so that original models are not corrupted. Only received ones become noisy
+        model_list = {node:Net.add_noise(copy.deepcopy(model_list[node].model)) for node in (agg_full + agg_conv)}
+        
+    for layer in agg_model.state_dict().keys():
+        if 'weight' in layer:
+            for node in agg_full:
+                agg_model.state_dict()[layer].add_(torch.mul(model_list[node].model.state_dict()[layer], scale[node]))
+        agg_model.state_dict()[layer].div_(len(agg_full))
+    
+    if agg_conv is not None:
+        for layer in agg_model.state_dict().keys():
+            if 'conv' in layer and 'weight' in layer:
+                for node in agg_conv:
+                    agg_model.state_dict()[layer].add_(torch.mul(model_list[node].model.state_dict()[layer], scale[node]))
+            agg_model.state_dict()[layer].div_(len(agg_conv))
+                
+    return agg_model
+
 def model_checker(model1, model2):
     models_differ = 0
     for modeldata1, modeldata2 in zip(model1.state_dict().items(), model2.state_dict().items()):

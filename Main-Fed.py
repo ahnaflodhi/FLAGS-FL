@@ -36,7 +36,6 @@ alpha = args.a
 #  'ch_d2d':None, 'int_ch': None, 'gossip':None, 'hgossip':None
 # modes_list = {'chd2d':None, 'intch': None, 'intchd2d': None, 'd2d':None, 'cfl': None, 'sgd' : None}
 # 'd2d': d2d_flags, 'hd2d': hd2d_flags, 'hfl': hfl_flags, 'chd2d':chd2d_flags, 'intch': intch_flags, 'intchd2d':intchd2d_flags, 'gossip':gossip_flags, 'hgossip':hgossip_flags, 'cfl':cfl_flags, 'sgd':None
-                 
 modes_list = {'d2d':None, 'chd2d':None, 'intch': None, 'intchd2d': None, 'gossip' : None,  'cfl': None, 'sgd' : None}
 
 def D2DFL(model_type, dataset, batch_size, test_batch_size, modes, num_nodes, num_clusters, num_servers, num_rounds, 

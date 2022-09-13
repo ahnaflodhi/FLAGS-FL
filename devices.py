@@ -79,96 +79,7 @@ class Nodes:
         self.testacc.append(test_acc)
         print(f'Node{self.idx}: LR={self.opt.param_groups[0]["lr"]} Trg Loss= {self.trgloss[-1]:0.3f} Trg Acc= {self.trgacc[-1]} Test Acc= {self.testacc[-1]:0.3f}', end = ", ", flush = True)
          
-    def neighborhood_divergence(self, nodeset, cfl_model,  div_metric = 'L2', div_mode ='cfl_div', normalize = False):
-        div_dict = {node:None for node in self.neighborhood}
-        total_div_dict = copy.deepcopy(div_dict)
-        conv_div_dict = copy.deepcopy(div_dict)
-        fc_div_dict = copy.deepcopy(div_dict)
-        
-        for nhbr_node in self.neighborhood:
-            totaldiv, convdiv, fcdiv = self.internode_divergence(cfl_model, nodeset[nhbr_node].model, div_metric, div_mode)
-#             print(total_div, conv_div, fc_div)
-#             print(self.divergence_dict)
-            self.divergence_dict[nhbr_node].append(totaldiv)
-            self.divergence_conv_dict[nhbr_node].append(convdiv)
-            self.divergence_fc_dict[nhbr_node].append(fcdiv)
-            
-        if normalize == True:
-            self.normalize_divergence()
-    
-    def internode_divergence(self, cfl_model, target_model, div_metric, div_mode):
-        total_div = 0
-        conv_div = 0
-        fc_div  = 0
-        
-        if div_mode == 'internode':        
-            ref_wt = extract_weights(self.model)
-            target_wt = extract_weights(target_model)
-        elif div_mode == 'cfl_div':
-            ref_wt = extract_weights(cfl_model)
-            target_wt = extract_weights(target_model)
-            
-        for layer in ref_wt.keys():
-            if 'weight' not in layer:
-                continue
-            if div_metric == 'L2':
-                diff = torch.linalg.norm(ref_wt[layer] - target_wt[layer]).item()
-            total_div += diff
-            if 'conv' in layer:
-                conv_div += diff
-            if 'fc' in layer:
-                fc_div += diff
-                             
-        return total_div, conv_div, fc_div
-      
-    def normalize_divergence(self):
-        total_div_factor = sum([self.divergence_dict[nhbr][-1] for nhbr in self.divergence_dict.keys()])
-        conv_div_factor = sum([self.divergence_conv_dict[nhbr][-1] for nhbr in self.divergence_conv_dict.keys()])
-        fc_div_factor = sum([self.divergence_fc_dict[nhbr][-1] for nhbr in self.divergence_fc_dict.keys()])
-        
-        for nhbr in self.divergence_dict.keys():
-            self.divergence_dict[nhbr][-1] = self.divergence_dict[nhbr][-1] / total_div_factor
-            self.divergence_conv_dict[nhbr][-1] = self.divergence_conv_dict[nhbr][-1] / conv_div_factor
-            self.divergence_fc_dict[nhbr][-1] = self.divergence_fc_dict[nhbr][-1] / fc_div_factor
-    
-    def nhood_ranking(self, rnd, mode_name, sort_crit = 'total', sort_scope = 1, sort_type = 'min'):
-        if mode_name == 'd2d_up':
-            sort_type = 'min'
-        elif mode_name == 'd2d_down':
-            sort_type =  'max'
-        elif mode_name == 'd2d_main':
-            sort_type = None
-            
-        if sort_crit == 'total':
-            self.apply_ranking(self.divergence_dict, rnd, sort_scope, sort_type)
-        elif sort_crit == 'conv':
-            self.apply_ranking(self.divergence_conv_dict, rnd, sort_scope, sort_type)
-        elif sort_crit == 'fc':
-            self.apply_ranking(self.divergence_fc_dict, rnd, sort_scope, sort_type)
-    
-    def apply_ranking(self, target, rnd, sort_scope, sort_type):
-        # Target is the metric (divergence, KL, WS) to apply ranking on.
-        if rnd == 0 or sort_type is None:
-            self.ranked_nhood = self.neighborhood           
-        else:
-            prev_performance = {neighbor:sum(divergence[-sort_scope:]) for neighbor, divergence in target.items()}
-            if sort_type == 'min':
-#                     sorted_nhood ={k: v for k, v in sorted(prev_performance.items(), key=lambda item: item[1])}
-                sorted_nhood = heapq.nsmallest(len(target), prev_performance.items(), key = lambda i:i[1])
-            elif sort_type == 'max':
-                sorted_nhood = heapq.nlargest(len(target), prev_performance.items(), key = lambda i:i[1])
-            self.ranked_nhood = [nhbr for nhbr, _ in sorted_nhood]
-            del sorted_nhood
-            gc.collect()
-
     def scale_update(self, weightage):
-#         # Aggregation Weights
-#         if weightage == 'equal':
-#             # Same weights applied to all aggregation
-#             scale = {node:1.0 for node in self.neighborhood}
-#         elif weightage == 'proportional':
-#             # Divergence-based weights applied to respective models.
-#             scale = {node:self.divergence_dict[node][-1] for node in self.neighborhood}
         scale = {node:1.0 for node in self.neighborhood}
         return scale
             
@@ -211,6 +122,31 @@ class Nodes:
         del agg_model
         gc.collect()
         
+    def cos_check(self, nodeset):
+        cos = nn.CosineSimilarity(dim=0, eps=1e-6)
+        self.cos_vals = {nhbr:None for nhbr in self.neighborhood}
+        self_vec = vectorize_model(self.model, 'all')
+        for neighbor in self.neighborhood:
+            temp =vectorize_model(nodeset[neighbor].model, 'all')
+            cos_sim = cos(self_vec, temp)
+            self.cos_vals[neighbor] = cos_sim
+    
+    def aggregate_selective(self, nodeset):
+        agg_full = []
+        agg_conv = []
+        for nhbr in self.neighborhood:
+            if self.cos_vals[nhbr] > 0.5:
+                agg_full.append(nhbr)
+            elif 0.0 <= self.cos_vals[nhr] <= 0.5:
+                agg_conv.appen(nhbr)
+                
+        agg_full.append(self.idx)
+        agg_model = selective_aggregate(nodeset, agg_full, agg_conv, scale)
+        self.model.load_state_dict(agg_model.state_dict())
+        del agg_model
+        gc.collect()
+        
+
 class Servers:
     def __init__(self, server_id, model, records = False):
         self.idx = server_id
@@ -240,3 +176,15 @@ class Servers:
         self.model.load_state_dict(server_agg_model.state_dict())
         del server_agg_model
         gc.collect()
+        
+def vectorize_model(model, key = 'all'):
+    temp = []
+    for layer in model.state_dict():
+        if key != 'all': # Vectorize parts of model
+            if 'weight' in layer and key in layer:
+                temp.append(model.state_dict()[layer].view(-1))
+        else: # Vectorize complete model
+            if 'weight' in layer: 
+                temp.append(model.state_dict()[layer].view(-1))
+    x = torch.cat(temp)
+    return x
